@@ -796,16 +796,6 @@ void SettingsPage::updateFirmwareDeviceSerial(const QString &serialText)
     firmwareVersionPage->updateDeviceSerial(serialText);
 }
 
-void SettingsPage::updateDeviceReportedTime(const QString &timestamp)
-{
-    if (!systemFunctionPage)
-    {
-        return;
-    }
-
-    systemFunctionPage->updateDeviceReportedTime(timestamp);
-}
-
 void SettingsPage::onDeviceConnectionLost()
 {
     if (!modeSelectPage)

@@ -114,7 +114,7 @@ class SettingsPage : public QWidget
     void requestQueryAlarmHistory();
     void requestQueryDeviceUsageInfo();
     void requestSaveBuzzerEnabled(uint8_t enabled);
-    void requestSaveSystemTime(const QDateTime &dateTime);
+    void requestSaveSystemTime(const QDateTime &dateTime, const QString &timezoneId);
     void requestSetScreenFlashEnabled(bool enabled);
     void requestRebootDevice();
     void requestSaveModelLibraryMode(uint8_t mode);
@@ -198,7 +198,6 @@ class SettingsPage : public QWidget
     void updateSignalSourceParamsSaveResult(bool success, const QString &message);
     void updateFirmwareVersions(const QString &appVersion, const QString &fpgaVersion, const QString &gpuVersion);
     void updateFirmwareDeviceSerial(const QString &serialText);
-    void updateDeviceReportedTime(const QString &timestamp);
     void onDeviceConnectionLost();
     void onDeviceConnectionRestored();
 };

@@ -10,17 +10,13 @@ QString parseResultMessage(const QByteArray &frameData)
 }
 } // namespace
 
+// 当前系统协议分发仅保留设备重启相关逻辑。
+// Linux 板子本机时间设置已改由 AppController 直接通过系统命令处理，
+// 不再经过 TcpManager 的设备协议链路。
 bool TcpManager::dispatchSystemProtocol(const ProtocolHeader *header, const QByteArray &frameData)
 {
     switch (header->dataType)
     {
-    case 17:
-    {
-        const QString resultMsg = parseResultMessage(frameData);
-        const bool success = resultMsg.contains(QStringLiteral("RESULT:SUCCESSED"));
-        emit systemTimeSetResponse(success, resultMsg);
-        return true;
-    }
     case 30:
     {
         const QString resultMsg = parseResultMessage(frameData);
@@ -31,11 +27,6 @@ bool TcpManager::dispatchSystemProtocol(const ProtocolHeader *header, const QByt
     default:
         return false;
     }
-}
-
-void TcpManager::setSystemTime()
-{
-    setSystemTime(QDateTime::currentDateTime());
 }
 
 void TcpManager::rebootDevice()

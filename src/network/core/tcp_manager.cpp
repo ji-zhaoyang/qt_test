@@ -189,60 +189,6 @@ void TcpManager::sendFrame(uint16_t dataType, const QByteArray &data)
     rememberSentFrame(dataType, frame.size());
 }
 
-static void fillHeaderDateTime(ProtocolHeader &header, const QDateTime &dateTime)
-{
-    const QDateTime effectiveDateTime = dateTime.isValid() ? dateTime : QDateTime::currentDateTime();
-    const QDate date = effectiveDateTime.date();
-    const QTime time = effectiveDateTime.time();
-
-    header.year = date.year();
-    header.month = date.month();
-    header.day = date.day();
-    header.hour = time.hour();
-    header.minute = time.minute();
-    header.second = time.second();
-    header.millisecond = time.msec();
-}
-
-void TcpManager::setSystemTime(const QDateTime &dateTime)
-{
-    if (tcpSocket->state() != QAbstractSocket::ConnectedState)
-    {
-        qDebug() << "[TcpManager] 未连接服务器，无法发送命令 (DataType:" << 16 << ") 当前状态:" << socketStateText()
-                 << "目标地址:" << lastConnectedIp << ":" << lastConnectedPort;
-        return;
-    }
-
-    ProtocolHeader header;
-    header.startFlag = 0xEEEEEEEE;
-    header.version = 0x0302;
-    header.length = sizeof(ProtocolHeader) + sizeof(ProtocolTail);
-    fillHeaderDateTime(header, dateTime);
-    header.dataType = 16;
-
-    static uint64_t s_packageNum = 0;
-    header.packageNum = ++s_packageNum;
-
-    QByteArray frame;
-    frame.append(reinterpret_cast<const char *>(&header), sizeof(ProtocolHeader));
-
-    uint8_t checksum = 0;
-    for (int i = 4; i < frame.size(); ++i)
-    {
-        checksum += static_cast<uint8_t>(frame.at(i));
-    }
-
-    ProtocolTail tail;
-    tail.checksum = checksum;
-    tail.endFlag = 0xAAAAAAAA;
-
-    frame.append(reinterpret_cast<const char *>(&tail), sizeof(ProtocolTail));
-
-    tcpSocket->write(frame);
-    tcpSocket->flush();
-    rememberSentFrame(16, frame.size());
-}
-
 bool TcpManager::isConnected() const
 {
     return tcpSocket->state() == QAbstractSocket::ConnectedState;
@@ -257,7 +203,6 @@ void TcpManager::onSocketConnected()
     lastSocketErrorText.clear();
     qDebug() << "[TcpManager] TCP 客户端连接成功！";
     reconnectTimer->stop(); // 连接成功，停止重连定时器
-    // setSystemTime(); // 暂时屏蔽：连接成功后，不自动向设备下发当前系统时间
     emit connected();
 }
 

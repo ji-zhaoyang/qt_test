@@ -1,9 +1,11 @@
 #include "system_function_page.h"
+#include "services/local_time_service_client.h"
 #include <QAbstractItemView>
 #include <QAbstractSpinBox>
 #include <QCheckBox>
 #include <QCalendarWidget>
 #include <QComboBox>
+#include <QCompleter>
 #include <QDateTime>
 #include <QDateTimeEdit>
 #include <QEvent>
@@ -20,7 +22,9 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QStorageInfo>
 #include <QTimer>
+#include <QTimeZone>
 #include <QVBoxLayout>
 
 namespace
@@ -30,44 +34,78 @@ QString requiredLabelText(const QString &text)
     return QStringLiteral("<font color='#ff6a55'>*</font> ") + text;
 }
 
-QString normalizeDeviceTimestamp(const QString &timestamp)
+QString formatStorageBytes(qint64 bytes)
 {
-    const QString trimmed = timestamp.trimmed();
-    if (trimmed.isEmpty())
+    if (bytes <= 0)
     {
-        return trimmed;
+        return QStringLiteral("0B");
     }
 
-    const QDateTime parsed = QDateTime::fromString(trimmed, QStringLiteral("yyyy/MM/dd HH:mm:ss:zzz"));
-    if (parsed.isValid())
+    static const char *const units[] = {"B", "KB", "MB", "GB", "TB", "PB"};
+    double value = static_cast<double>(bytes);
+    int unitIndex = 0;
+    while (value >= 1024.0 && unitIndex < 5)
     {
-        return parsed.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+        value /= 1024.0;
+        ++unitIndex;
     }
 
-    QString text = trimmed;
-    const int lastColon = text.lastIndexOf(':');
-    if (lastColon > text.indexOf(' '))
+    return QStringLiteral("%1%2").arg(QString::number(value, 'f', unitIndex == 0 ? 0 : 2)).arg(QString::fromLatin1(units[unitIndex]));
+}
+
+QString diskSpaceText()
+{
+    const QStorageInfo storage = QStorageInfo::root();
+    if (!storage.isValid() || !storage.isReady() || storage.bytesTotal() <= 0)
     {
-        bool ok = false;
-        text.mid(lastColon + 1).toInt(&ok);
-        if (ok)
-        {
-            text = text.left(lastColon);
-        }
+        return QStringLiteral("--/--");
     }
 
-    return text.replace('/', '-');
+    return QStringLiteral("%1/%2").arg(formatStorageBytes(storage.bytesAvailable())).arg(formatStorageBytes(storage.bytesTotal()));
+}
+
+QString helperStatusSummary(const LocalTimeServiceResult &result)
+{
+    if (result.success)
+    {
+        return QStringLiteral("在线");
+    }
+
+    const QString message = result.message.trimmed();
+    if (message.contains(QStringLiteral("未被允许")) || message.contains(QStringLiteral("未授权")) ||
+        message.contains(QStringLiteral("调用方")) || message.contains(QStringLiteral("身份")) ||
+        message.contains(QStringLiteral("无权限访问")))
+    {
+        return QStringLiteral("未授权：%1").arg(message);
+    }
+
+    if (message.contains(QStringLiteral("未启动")) || message.contains(QStringLiteral("超时")) ||
+        message.contains(QStringLiteral("拒绝")) || message.contains(QStringLiteral("No such file")) ||
+        message.contains(QStringLiteral("not found")))
+    {
+        return QStringLiteral("离线：%1").arg(message.isEmpty() ? QStringLiteral("qt_time_helper 未启动") : message);
+    }
+
+    if (message.contains(QStringLiteral("请求格式")) || message.contains(QStringLiteral("不支持")) ||
+        message.contains(QStringLiteral("时间格式")) || message.contains(QStringLiteral("白名单")) ||
+        message.contains(QStringLiteral("允许范围")))
+    {
+        return QStringLiteral("参数非法：%1").arg(message);
+    }
+
+    return QStringLiteral("服务异常：%1").arg(message.isEmpty() ? QStringLiteral("qt_time_helper 返回异常") : message);
 }
 } // namespace
 
 SystemFunctionPage::SystemFunctionPage(QWidget *parent)
     : QWidget(parent), alarmVoiceToggle(nullptr), screenFlashToggle(nullptr), alarmSaveButton(nullptr),
-      rebootButton(nullptr), currentTimeValueLabel(nullptr), timezoneComboBox(nullptr), setTimeEdit(nullptr),
-      syncTimeToggle(nullptr), timeSaveButton(nullptr), warningRemoveTimeEdit(nullptr), mapTypeComboBox(nullptr),
-      paramSaveButton(nullptr), diskSpaceValueLabel(nullptr), uploadButton(nullptr), clearButton(nullptr),
+      rebootButton(nullptr), currentTimeValueLabel(nullptr), helperStatusValueLabel(nullptr), timezoneComboBox(nullptr), setTimeEdit(nullptr),
+      timeSaveButton(nullptr), warningRemoveTimeEdit(nullptr), mapTypeComboBox(nullptr),
+      paramSaveButton(nullptr), diskSpaceValueLabel(nullptr),
       changePasswordFrame(nullptr), normalAdminPasswordRadio(nullptr), advancedAdminPasswordRadio(nullptr),
       oldPasswordEdit(nullptr), newPasswordEdit(nullptr), confirmPasswordEdit(nullptr), changePasswordSaveButton(nullptr),
-      toastWidget(nullptr), toastIconLabel(nullptr), toastTextLabel(nullptr), toastHideTimer(nullptr),
+      toastWidget(nullptr), toastIconLabel(nullptr), toastTextLabel(nullptr), localTimeServiceClient(new LocalTimeServiceClient(this)),
+      localSystemTimeTimer(nullptr), helperStatusTimer(nullptr), toastHideTimer(nullptr),
       toastOpacityEffect(nullptr), toastFadeInAnimation(nullptr), toastFadeOutAnimation(nullptr),
       rebootConfirmOverlay(nullptr), rebootConfirmPanel(nullptr), rebootConfirmIconLabel(nullptr),
       rebootConfirmTitleLabel(nullptr), rebootConfirmMessageLabel(nullptr), rebootConfirmCancelButton(nullptr),
@@ -159,68 +197,34 @@ void SystemFunctionPage::setupUi()
     operationLayout->addLayout(operationButtonLayout);
 
     QVBoxLayout *timeLayout = nullptr;
-    QFrame *timeFrame = createSectionFrame(QStringLiteral("系统时间"), pageLayout, timeLayout);
-    QLabel *tipLabel = new QLabel(QStringLiteral("设置后系统将重启"), timeFrame);
+    QFrame *timeFrame = createSectionFrame(QStringLiteral("本机时间"), pageLayout, timeLayout);
+    QLabel *tipLabel = new QLabel(QStringLiteral("保存后将应用到当前 Linux 板子"), timeFrame);
     tipLabel->setStyleSheet("background-color: #3f2a0a; color: #f0b24f; border: 1px solid #694205; border-radius: 6px; "
                             "padding: 8px 12px; font-size: 13px;");
     timeLayout->addWidget(tipLabel);
-    currentTimeValueLabel = new QLabel(QStringLiteral("2026-05-22 09:34:31"), timeFrame);
+    currentTimeValueLabel = new QLabel(timeFrame);
     currentTimeValueLabel->setStyleSheet(readOnlyValueStyle());
-    timeLayout->addWidget(createReadOnlyRow(timeFrame, QStringLiteral("系统时间"), currentTimeValueLabel));
+    timeLayout->addWidget(createReadOnlyRow(timeFrame, QStringLiteral("本机时间"), currentTimeValueLabel));
+    updateLocalSystemTimeDisplay();
+    localSystemTimeTimer = new QTimer(this);
+    localSystemTimeTimer->setInterval(1000);
+    connect(localSystemTimeTimer, &QTimer::timeout, this, &SystemFunctionPage::updateLocalSystemTimeDisplay);
+    localSystemTimeTimer->start();
     timeLayout->addWidget(createSeparatorLine(timeFrame));
-    timezoneComboBox = createStyledComboBox(timeFrame, QStringList() << QStringLiteral("Asia/Shanghai"), 160,
-                                            QStringLiteral("Asia/Shanghai"));
+    helperStatusValueLabel = new QLabel(timeFrame);
+    helperStatusValueLabel->setStyleSheet(readOnlyValueStyle());
+    timeLayout->addWidget(createReadOnlyRow(timeFrame, QStringLiteral("时间服务状态"), helperStatusValueLabel));
+    updateHelperStatusDisplay();
+    helperStatusTimer = new QTimer(this);
+    helperStatusTimer->setInterval(5000);
+    connect(helperStatusTimer, &QTimer::timeout, this, &SystemFunctionPage::updateHelperStatusDisplay);
+    helperStatusTimer->start();
+    timeLayout->addWidget(createSeparatorLine(timeFrame));
+    timezoneComboBox = createStyledTimezoneComboBox(timeFrame, 220);
     timeLayout->addWidget(createFormRow(timeFrame, QStringLiteral("时区"), timezoneComboBox));
     timeLayout->addWidget(createSeparatorLine(timeFrame));
     setTimeEdit = createStyledDateTimeEdit(timeFrame);
-    timeLayout->addWidget(createFormRow(timeFrame, QStringLiteral("设置时间"), setTimeEdit));
-    timeLayout->addWidget(createSeparatorLine(timeFrame));
-    syncTimeToggle = createStyledToggleSwitch(timeFrame, false);
-    connect(syncTimeToggle, &QCheckBox::toggled, this,
-            [this](bool checked)
-            {
-                if (!setTimeEdit || !timezoneComboBox)
-                {
-                    return;
-                }
-
-                if (checked)
-                {
-                    hideTimePickerPopup();
-                }
-
-                setTimeEdit->setEnabled(!checked);
-                timezoneComboBox->setEnabled(!checked);
-                setTimeEdit->setStyleSheet(
-                    checked
-                        ? "QDateTimeEdit { background-color: #1a1b1d; color: #7d828a; border: 1px solid #2d2d2d; "
-                          "border-radius: 2px; padding: 0 10px; font-size: 14px; }"
-                          "QDateTimeEdit::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 28px; "
-                          "border-left: 1px solid #2a2a2a; }"
-                          "QDateTimeEdit::down-arrow { image: none; }"
-                        : "QDateTimeEdit { background-color: #101113; color: #ffffff; border: 1px solid #2d2d2d; "
-                          "border-radius: 2px; padding: 0 10px; font-size: 14px; }"
-                          "QDateTimeEdit::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 28px; "
-                          "border-left: 1px solid #2a2a2a; }"
-                          "QDateTimeEdit::down-arrow { image: none; }");
-                timezoneComboBox->setStyleSheet(
-                    checked
-                        ? "QComboBox { background-color: #1a1b1d; color: #7d828a; border: 1px solid #2d2d2d; "
-                          "border-radius: 2px; padding-left: 10px; padding-right: 28px; font-size: 14px; }"
-                          "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 28px; "
-                          "border-left: 1px solid #2a2a2a; }"
-                          "QComboBox::down-arrow { image: none; }"
-                          "QComboBox QAbstractItemView { background-color: #202225; color: #ffffff; "
-                          "selection-background-color: #3a3a3a; border: 1px solid #2e2e2e; }"
-                        : "QComboBox { background-color: #101113; color: #ffffff; border: 1px solid #2d2d2d; "
-                          "border-radius: 2px; padding-left: 10px; padding-right: 28px; font-size: 14px; }"
-                          "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 28px; "
-                          "border-left: 1px solid #2a2a2a; }"
-                          "QComboBox::down-arrow { image: none; }"
-                          "QComboBox QAbstractItemView { background-color: #202225; color: #ffffff; "
-                          "selection-background-color: #3a3a3a; border: 1px solid #2e2e2e; }");
-            });
-    timeLayout->addWidget(createFormRow(timeFrame, QStringLiteral("与计算机时间同步"), syncTimeToggle));
+    timeLayout->addWidget(createFormRow(timeFrame, QStringLiteral("设置本机时间"), setTimeEdit));
     timeLayout->addWidget(createSeparatorLine(timeFrame));
     QHBoxLayout *timeButtonLayout = new QHBoxLayout();
     timeButtonLayout->setContentsMargins(0, 16, 0, 0);
@@ -235,13 +239,22 @@ void SystemFunctionPage::setupUi()
                 }
 
                 QDateTime targetDateTime = setTimeEdit->dateTime();
-                if (syncTimeToggle && syncTimeToggle->isChecked())
+
+                QString timezoneId = QStringLiteral("Asia/Shanghai");
+                if (timezoneComboBox)
                 {
-                    targetDateTime = QDateTime::currentDateTime();
-                    setTimeEdit->setDateTime(targetDateTime);
+                    timezoneId = timezoneComboBox->currentText().trimmed();
+                    if (timezoneId.isEmpty())
+                    {
+                        timezoneId = QString::fromUtf8(QTimeZone::systemTimeZoneId());
+                    }
+                    if (timezoneId.isEmpty())
+                    {
+                        timezoneId = QStringLiteral("Asia/Shanghai");
+                    }
                 }
 
-                emit requestSaveSystemTime(targetDateTime);
+                emit requestSaveSystemTime(targetDateTime, timezoneId);
             });
     timeButtonLayout->addWidget(timeSaveButton);
     timeButtonLayout->addStretch();
@@ -264,21 +277,15 @@ void SystemFunctionPage::setupUi()
     paramButtonLayout->addStretch();
     paramLayout->addLayout(paramButtonLayout);
 
-    QVBoxLayout *offlineLayout = nullptr;
-    QFrame *offlineFrame = createSectionFrame(QStringLiteral("离线地图上传"), pageLayout, offlineLayout);
-    diskSpaceValueLabel = new QLabel(QStringLiteral("908.12GB/937.71GB"), offlineFrame);
+    QFrame *offlineFrame = new QFrame(this);
+    offlineFrame->setStyleSheet("QFrame { background-color: #2a2d33; border-radius: 0px; }");
+    QVBoxLayout *offlineLayout = new QVBoxLayout(offlineFrame);
+    offlineLayout->setContentsMargins(0, 0, 0, 0);
+    offlineLayout->setSpacing(0);
+    diskSpaceValueLabel = new QLabel(diskSpaceText(), offlineFrame);
     diskSpaceValueLabel->setStyleSheet(readOnlyValueStyle());
-    offlineLayout->addWidget(createReadOnlyRow(offlineFrame, QStringLiteral("磁盘空间（剩余/总）"), diskSpaceValueLabel->text()));
-    offlineLayout->addWidget(createSeparatorLine(offlineFrame));
-    QHBoxLayout *offlineButtonLayout = new QHBoxLayout();
-    offlineButtonLayout->setContentsMargins(0, 16, 0, 0);
-    offlineButtonLayout->setSpacing(16);
-    uploadButton = createPrimaryButton(offlineFrame, QStringLiteral("上传"), 120);
-    clearButton = createPrimaryButton(offlineFrame, QStringLiteral("清空"), 120);
-    offlineButtonLayout->addWidget(uploadButton);
-    offlineButtonLayout->addWidget(clearButton);
-    offlineButtonLayout->addStretch();
-    offlineLayout->addLayout(offlineButtonLayout);
+    offlineLayout->addWidget(createReadOnlyRow(offlineFrame, QStringLiteral("磁盘空间（剩余/总）"), diskSpaceValueLabel));
+    pageLayout->addWidget(offlineFrame);
 
     QVBoxLayout *passwordLayout = nullptr;
     changePasswordFrame = createSectionFrame(QStringLiteral("修改密码"), pageLayout, passwordLayout);
@@ -334,20 +341,6 @@ void SystemFunctionPage::updateBuzzerEnabled(uint8_t enabled)
     alarmVoiceToggle->setChecked(enabled == 1);
 }
 
-void SystemFunctionPage::updateDeviceReportedTime(const QString &timestamp)
-{
-    if (!currentTimeValueLabel)
-    {
-        return;
-    }
-
-    const QString normalized = normalizeDeviceTimestamp(timestamp);
-    if (!normalized.isEmpty())
-    {
-        currentTimeValueLabel->setText(normalized);
-    }
-}
-
 void SystemFunctionPage::showAlarmSaveResult(bool success, const QString &message)
 {
     showToastResult(success, message);
@@ -355,12 +348,40 @@ void SystemFunctionPage::showAlarmSaveResult(bool success, const QString &messag
 
 void SystemFunctionPage::showSystemTimeSaveResult(bool success, const QString &message)
 {
-    if (success && currentTimeValueLabel && setTimeEdit)
+    if (success)
     {
-        currentTimeValueLabel->setText(setTimeEdit->dateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+        updateLocalSystemTimeDisplay();
     }
+    updateHelperStatusDisplay();
 
     showToastResult(success, message);
+}
+
+void SystemFunctionPage::updateLocalSystemTimeDisplay()
+{
+    if (!currentTimeValueLabel)
+    {
+        return;
+    }
+
+    currentTimeValueLabel->setText(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+}
+
+void SystemFunctionPage::updateHelperStatusDisplay()
+{
+    if (!helperStatusValueLabel || !localTimeServiceClient)
+    {
+        return;
+    }
+
+    const LocalTimeServiceResult result = localTimeServiceClient->checkAvailability();
+    const QString statusText = helperStatusSummary(result);
+    helperStatusValueLabel->setText(statusText);
+    helperStatusValueLabel->setStyleSheet(
+        result.success ? QStringLiteral("color: #67c23a; font-size: 14px;")
+                       : (statusText.startsWith(QStringLiteral("未授权"))
+                              ? QStringLiteral("color: #e6a23c; font-size: 14px;")
+                              : QStringLiteral("color: #ff6a55; font-size: 14px;")));
 }
 
 void SystemFunctionPage::showRebootResult(bool success, const QString &message)
@@ -515,6 +536,47 @@ QComboBox *SystemFunctionPage::createStyledComboBox(QFrame *parent, const QStrin
             comboBox->setCurrentIndex(index);
         }
     }
+    return comboBox;
+}
+
+QComboBox *SystemFunctionPage::createStyledTimezoneComboBox(QFrame *parent, int width) const
+{
+    QStringList timezoneItems;
+    const QList<QByteArray> timeZoneIds = QTimeZone::availableTimeZoneIds();
+    timezoneItems.reserve(timeZoneIds.size());
+    for (const QByteArray &id : timeZoneIds)
+    {
+        timezoneItems.append(QString::fromUtf8(id));
+    }
+    timezoneItems.sort(Qt::CaseInsensitive);
+
+    QString currentTimezoneId = QString::fromUtf8(QTimeZone::systemTimeZoneId());
+    if (currentTimezoneId.isEmpty() || !timezoneItems.contains(currentTimezoneId))
+    {
+        currentTimezoneId = QStringLiteral("Asia/Shanghai");
+    }
+
+    QComboBox *comboBox = createStyledComboBox(parent, timezoneItems, width, currentTimezoneId);
+    comboBox->setEditable(true);
+    comboBox->setInsertPolicy(QComboBox::NoInsert);
+    comboBox->setMaxVisibleItems(12);
+
+    if (QLineEdit *lineEdit = comboBox->lineEdit())
+    {
+        lineEdit->setPlaceholderText(QStringLiteral("搜索时区"));
+        lineEdit->setClearButtonEnabled(true);
+        lineEdit->setStyleSheet("QLineEdit { background-color: transparent; color: #ffffff; border: none; padding: 0 18px 0 0; }"
+                                "QLineEdit::placeholder { color: #757b84; }");
+        lineEdit->setCursorPosition(0);
+    }
+
+    if (QCompleter *completer = comboBox->completer())
+    {
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+        completer->setFilterMode(Qt::MatchContains);
+        completer->setCompletionMode(QCompleter::PopupCompletion);
+    }
+
     return comboBox;
 }
 

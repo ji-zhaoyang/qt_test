@@ -1,5 +1,6 @@
 #include "app_controller.h"
 #include "network/core/tcp_manager.h"
+#include "services/local_time_service_client.h"
 #include "views/home/home_page.h"
 #include "views/settings/settings_page.h"
 #include <QDebug>
@@ -12,7 +13,8 @@ AppController::AppController(HomePage *homePage, SettingsPage *settingsPage, QOb
 
 AppController::AppController(HomePage *homePage, SettingsPage *settingsPage, const ConnectionConfig &connectionConfig,
                              QObject *parent)
-    : QObject(parent), homePage(homePage), settingsPage(settingsPage), tcpManager(new TcpManager(this)),
+    : QObject(parent), homePage(homePage), settingsPage(settingsPage),
+      localTimeServiceClient(new LocalTimeServiceClient(this)), tcpManager(new TcpManager(this)),
       connectionConfigValue(connectionConfig)
 {
     tcpManager->setReconnectIntervalMs(connectionConfigValue.reconnectIntervalMs);
@@ -80,7 +82,6 @@ void AppController::setupConnections()
     connect(tcpManager, &TcpManager::deviceUsageInfoQueried, settingsPage, &SettingsPage::updateDeviceUsageInfo);
     connect(tcpManager, &TcpManager::buzzerEnabledQueried, settingsPage, &SettingsPage::updateBuzzerEnabled);
     connect(tcpManager, &TcpManager::buzzerEnabledSetResponse, settingsPage, &SettingsPage::updateBuzzerEnabledSaveResult);
-    connect(tcpManager, &TcpManager::systemTimeSetResponse, settingsPage, &SettingsPage::updateSystemTimeSaveResult);
     connect(tcpManager, &TcpManager::deviceRebootResponse, settingsPage, &SettingsPage::updateRebootResult);
     connect(tcpManager, &TcpManager::modelLibraryModeQueried, settingsPage, &SettingsPage::updateModelLibraryMode);
     connect(tcpManager, &TcpManager::modelLibraryModeSetResponse, settingsPage,
@@ -129,8 +130,12 @@ void AppController::setupConnections()
     connect(settingsPage, &SettingsPage::requestQueryAlarmHistory, tcpManager, &TcpManager::queryDeviceAlarmHistory);
     connect(settingsPage, &SettingsPage::requestQueryDeviceUsageInfo, tcpManager, &TcpManager::queryDeviceUsageInfo);
     connect(settingsPage, &SettingsPage::requestSaveBuzzerEnabled, tcpManager, &TcpManager::setBuzzerEnabled);
-    connect(settingsPage, &SettingsPage::requestSaveSystemTime, tcpManager,
-            static_cast<void (TcpManager::*)(const QDateTime &)>(&TcpManager::setSystemTime));
+    connect(settingsPage, &SettingsPage::requestSaveSystemTime, this,
+            [this](const QDateTime &dateTime, const QString &timezoneId)
+            {
+                const LocalTimeServiceResult result = localTimeServiceClient->setSystemTime(dateTime, timezoneId);
+                settingsPage->updateSystemTimeSaveResult(result.success, result.message);
+            });
     connect(settingsPage, &SettingsPage::requestRebootDevice, tcpManager, &TcpManager::rebootDevice);
     connect(settingsPage, &SettingsPage::requestSaveModelLibraryMode, tcpManager, &TcpManager::setModelLibraryMode);
     connect(settingsPage, &SettingsPage::requestUpdateModelLibraryRecord, tcpManager, &TcpManager::setModelLibraryRecord);
@@ -204,12 +209,6 @@ void AppController::onTcpError(const QString &errorStr)
 
 void AppController::onDeviceInfoReceived(const QJsonObject &deviceInfo)
 {
-    const QString deviceTimestamp = deviceInfo.value("timestamp").toString().trimmed();
-    if (!deviceTimestamp.isEmpty())
-    {
-        settingsPage->updateDeviceReportedTime(deviceTimestamp);
-    }
-
     if (deviceInfo.value("protocolDataType").toInt() == 2)
     {
         const QString deviceSerial = deviceInfo.value("deviceName").toString().trimmed();

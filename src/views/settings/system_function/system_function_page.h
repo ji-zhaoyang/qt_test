@@ -15,6 +15,7 @@ class QGraphicsOpacityEffect;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class LocalTimeServiceClient;
 class QPropertyAnimation;
 class QPushButton;
 class QRadioButton;
@@ -32,14 +33,13 @@ class SystemFunctionPage : public QWidget
 
   signals:
     void requestSaveBuzzerEnabled(uint8_t enabled);
-    void requestSaveSystemTime(const QDateTime &dateTime);
+    void requestSaveSystemTime(const QDateTime &dateTime, const QString &timezoneId);
     void requestQueryBuzzerEnabled();
     void requestSetScreenFlashEnabled(bool enabled);
     void requestRebootDevice();
 
   public slots:
     void updateBuzzerEnabled(uint8_t enabled);
-    void updateDeviceReportedTime(const QString &timestamp);
     void showSystemTimeSaveResult(bool success, const QString &message);
     void showAlarmSaveResult(bool success, const QString &message);
     void showRebootResult(bool success, const QString &message);
@@ -57,6 +57,7 @@ class SystemFunctionPage : public QWidget
     QWidget *createNoteRow(QFrame *parent, const QString &noteText) const;
     QFrame *createSeparatorLine(QFrame *parent) const;
     QComboBox *createStyledComboBox(QFrame *parent, const QStringList &items, int width, const QString &currentText) const;
+    QComboBox *createStyledTimezoneComboBox(QFrame *parent, int width) const;
     QLineEdit *createStyledLineEdit(QFrame *parent, const QString &text, int width) const;
     QLineEdit *createStyledPasswordEdit(QFrame *parent, const QString &placeholderText, int width) const;
     QDateTimeEdit *createStyledDateTimeEdit(QFrame *parent) const;
@@ -74,6 +75,8 @@ class SystemFunctionPage : public QWidget
     void applyTimePickerSelection();
     void showTimePickerPopup();
     void hideTimePickerPopup();
+    void updateLocalSystemTimeDisplay();
+    void updateHelperStatusDisplay();
     void updateToastPosition();
     void showToastResult(bool success, const QString &message);
     QString extractDisplayMessage(bool success, const QString &message) const;
@@ -87,16 +90,14 @@ class SystemFunctionPage : public QWidget
     QPushButton *alarmSaveButton;
     QPushButton *rebootButton;
     QLabel *currentTimeValueLabel;
+    QLabel *helperStatusValueLabel;
     QComboBox *timezoneComboBox;
     QDateTimeEdit *setTimeEdit;
-    QCheckBox *syncTimeToggle;
     QPushButton *timeSaveButton;
     QLineEdit *warningRemoveTimeEdit;
     QComboBox *mapTypeComboBox;
     QPushButton *paramSaveButton;
     QLabel *diskSpaceValueLabel;
-    QPushButton *uploadButton;
-    QPushButton *clearButton;
     QFrame *changePasswordFrame;
     QRadioButton *normalAdminPasswordRadio;
     QRadioButton *advancedAdminPasswordRadio;
@@ -107,6 +108,9 @@ class SystemFunctionPage : public QWidget
     QWidget *toastWidget;
     QLabel *toastIconLabel;
     QLabel *toastTextLabel;
+    LocalTimeServiceClient *localTimeServiceClient;
+    QTimer *localSystemTimeTimer;
+    QTimer *helperStatusTimer;
     QTimer *toastHideTimer;
     QGraphicsOpacityEffect *toastOpacityEffect;
     QPropertyAnimation *toastFadeInAnimation;

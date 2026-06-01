@@ -6,6 +6,7 @@
 #include <QObject>
 
 class HomePage;
+class LocalTimeServiceClient;
 class SettingsPage;
 class TcpManager;
 class QJsonObject;
@@ -40,6 +41,7 @@ class AppController : public QObject
 
     HomePage *homePage;
     SettingsPage *settingsPage;
+    LocalTimeServiceClient *localTimeServiceClient;
     TcpManager *tcpManager;
     ConnectionConfig connectionConfigValue;
     DeviceStatus deviceStatusValue;

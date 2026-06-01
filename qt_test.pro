@@ -39,6 +39,7 @@ SOURCES += \
         src/network/device_ops/tcp_manager_system.cpp \
         src/components/screen_flash_overlay.cpp \
         src/components/top_nav_bar.cpp \
+        src/services/local_time_service_client.cpp \
         src/views/history/history_page.cpp \
         src/views/home/home_page.cpp \
         src/views/home/bottom_console.cpp \
@@ -74,6 +75,7 @@ HEADERS += \
         src/network/core/tcp_manager.h \
         src/components/screen_flash_overlay.h \
         src/components/top_nav_bar.h \
+        src/services/local_time_service_client.h \
         src/views/history/history_page.h \
         src/views/home/home_page.h \
         src/views/home/bottom_console.h \
@@ -109,6 +111,7 @@ INCLUDEPATH += \
         $$PWD/src/network/device_ops \
         $$PWD/src/network/firmware \
         $$PWD/src/network/settings \
+        $$PWD/src/services \
         $$PWD/src/views \
         $$PWD/src/views/home \
         $$PWD/src/views/history \

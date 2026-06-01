@@ -24,8 +24,6 @@ public:
     void sendFrame(uint16_t dataType, const QByteArray &data = QByteArray());
 
     // 具体的业务下发接口
-    void setSystemTime();
-    void setSystemTime(const QDateTime &dateTime);                    // DataType 16
     void rebootDevice();                                              // DataType 29
     void startCompassCalibration();                                   // DataType 31
     void finishCompassCalibration();                                  // DataType 33
@@ -123,7 +121,6 @@ signals:
     void deviceUsageInfoQueried(const DeviceUsageInfo &info);
     void buzzerEnabledSetResponse(bool success, const QString &msg);
     void buzzerEnabledQueried(uint8_t enabled);
-    void systemTimeSetResponse(bool success, const QString &msg);
     void deviceRebootResponse(bool success, const QString &msg);
     void modelLibraryModeSetResponse(bool success, const QString &msg);
     void modelLibraryModeQueried(uint8_t mode);
