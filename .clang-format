@@ -1,0 +1,17 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+# 核心设置：控制大括号的换行风格
+# Allman 风格：所有的大括号（类、函数、if、for、while等）都会独占一行
+BreakBeforeBraces: Allman
+
+# 其他一些常见的 C++ 格式化推荐（可根据喜好调整）：
+AllowShortFunctionsOnASingleLine: Empty # 允许空函数在一行，如 void foo() {}
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: true
+PointerAlignment: Right # 指针星号靠右：int *a;
