@@ -1,0 +1,13 @@
+[Unit]
+Description=qt_test local qt_time_helper
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/qt_time_helper
+Restart=always
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target
