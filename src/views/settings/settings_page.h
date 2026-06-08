@@ -48,6 +48,7 @@ class SettingsPage : public QWidget
     void setupAuthView();
     void setupSettingsView();
     bool authenticateUser(const QString &password);
+    void handlePasswordChangeRequest(SettingsUserRole role, const QString &oldPassword, const QString &newPassword);
     void resetSettingsContent();
     QLabel *createPlaceholderPage(const QString &text);
     void addSidebarPage(const QString &sidebarText, QWidget *page);
@@ -123,6 +124,7 @@ class SettingsPage : public QWidget
     void requestSavePowerAmplifierParams(const PowerAmplifierParamList &params);
     void requestSaveDirectionCalibrationValues(const DirectionCalibrationValueList &values);
     void requestSaveSignalSourceParams(int serialScan, const QVector<int> &scanModes, int signalMode, const QVector<int> &vcoScans);
+    void requestUploadPatternFile(const PatternUploadRequest &request);
     void requestQueryGps();
     void requestQueryFullScan();
     void requestQueryDeviceIp();
@@ -141,6 +143,7 @@ class SettingsPage : public QWidget
     void requestQueryDirectionCalibrationValues();
     void requestQuerySignalSourceParams();
     void requestQueryBuzzerEnabled();
+    void requestQueryScreenFlashEnabled();
     void requestQueryModelLibraryMode();
     void requestQueryModelLibraryRecords(int current, int size);
 
@@ -180,6 +183,7 @@ class SettingsPage : public QWidget
     void updateAlarmHistory(const AlarmHistoryInfo &info);
     void updateDeviceUsageInfo(const DeviceUsageInfo &info);
     void updateBuzzerEnabled(uint8_t enabled);
+    void updateScreenFlashEnabled(bool enabled);
     void updateBuzzerEnabledSaveResult(bool success, const QString &message);
     void updateSystemTimeSaveResult(bool success, const QString &message);
     void updateRebootResult(bool success, const QString &message);
@@ -196,6 +200,7 @@ class SettingsPage : public QWidget
     void updateStrikeStatus(const QVector<int> &switchStates);
     void updateSignalSourceParams(const SignalSourceParamsConfig &config);
     void updateSignalSourceParamsSaveResult(bool success, const QString &message);
+    void updatePatternUploadResult(bool success, const QString &message);
     void updateFirmwareVersions(const QString &appVersion, const QString &fpgaVersion, const QString &gpuVersion);
     void updateFirmwareDeviceSerial(const QString &serialText);
     void onDeviceConnectionLost();

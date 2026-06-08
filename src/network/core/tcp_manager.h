@@ -41,6 +41,7 @@ public:
     void queryDirectionCalibrationValues();                                            // DataType 126
     void setSignalSourceParams(int serialScan, const QVector<int> &scanModes, int vcoMode, const QVector<int> &vcoScans);
     void querySignalSourceParams();
+    void uploadPatternFile(const PatternUploadRequest &request);       // DataType 18
     void setDeviceJammingMode(int mode, int switchStatus);            // DataType 100
     void queryDeviceJammingMode();                                    // DataType 102
     void queryDeviceAlarmHistory();                                   // DataType 116
@@ -129,6 +130,7 @@ signals:
     void deviceJammingStatusQueried(const QVector<int> &switchStates);
     void signalSourceParamsSetResponse(bool success, const QString &msg);
     void signalSourceParamsQueried(const SignalSourceParamsConfig &config);
+    void patternUploadResponse(bool success, const QString &msg);
 
 private slots:
     void onSocketConnected();
@@ -167,6 +169,7 @@ private:
     bool dispatchPowerAmplifierProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchDirectionCalibrationProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchSignalSourceParamsProtocol(const ProtocolHeader *header, const QByteArray &frameData);
+    bool dispatchDataCollectionProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchFirmwareProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchDeviceOpsProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchGpsProtocol(const ProtocolHeader *header, const QByteArray &frameData);
@@ -211,6 +214,7 @@ private:
     void handleDirectionCalibrationQueryResponse(const QByteArray &frameData);
     void handleSignalSourceParamsSetResponse(const QByteArray &frameData);
     void handleSignalSourceParamsQueryResponse(const QByteArray &frameData);
+    void handlePatternUploadResponse(const QByteArray &frameData);
     void rememberSentFrame(uint16_t dataType, int frameLength);
     void rememberReceivedFrame(uint16_t dataType, int frameLength);
     QString socketStateText() const;

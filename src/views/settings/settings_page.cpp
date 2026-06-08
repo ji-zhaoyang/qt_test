@@ -16,12 +16,21 @@
 #include "spectrum_switch/spectrum_switch_page.h"
 #include "system_log/system_log_page.h"
 #include "system_function/system_function_page.h"
+#include <QCoreApplication>
+#include <QCryptographicHash>
+#include <QDir>
 #include <QDebug>
 #include <QHBoxLayout>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QVBoxLayout>
 
 namespace
 {
+constexpr auto kAuthGroup = "auth";
+constexpr auto kAdminPasswordKey = "admin_password_hash";
+constexpr auto kRootPasswordKey = "root_password_hash";
+
 template <typename Func>
 void forwardToDeviceSettingsPage(DeviceSettingsPage *page, Func &&func)
 {
@@ -31,6 +40,59 @@ void forwardToDeviceSettingsPage(DeviceSettingsPage *page, Func &&func)
     }
 
     func(page);
+}
+
+QString hashPassword(const QString &password)
+{
+    return QString::fromLatin1(QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha256).toHex());
+}
+
+QString authConfigFilePath()
+{
+    QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    if (configDir.isEmpty())
+    {
+        configDir = QCoreApplication::applicationDirPath();
+    }
+
+    QDir dir(configDir);
+    dir.mkpath(QStringLiteral("."));
+    return dir.filePath(QStringLiteral("auth.ini"));
+}
+
+QString passwordKeyForRole(SettingsUserRole role)
+{
+    return role == SettingsUserRole::Root ? QString::fromLatin1(kRootPasswordKey)
+                                          : QString::fromLatin1(kAdminPasswordKey);
+}
+
+QString defaultPasswordForRole(SettingsUserRole role)
+{
+    return role == SettingsUserRole::Root ? QStringLiteral("root123") : QStringLiteral("admin");
+}
+
+QString storedPasswordHashForRole(SettingsUserRole role)
+{
+    QSettings settings(authConfigFilePath(), QSettings::IniFormat);
+    settings.beginGroup(QString::fromLatin1(kAuthGroup));
+    const QString storedHash = settings.value(passwordKeyForRole(role)).toString().trimmed();
+    settings.endGroup();
+    return storedHash.isEmpty() ? hashPassword(defaultPasswordForRole(role)) : storedHash;
+}
+
+bool verifyPasswordForRole(SettingsUserRole role, const QString &password)
+{
+    return !password.isEmpty() && storedPasswordHashForRole(role) == hashPassword(password);
+}
+
+bool savePasswordForRole(SettingsUserRole role, const QString &password)
+{
+    QSettings settings(authConfigFilePath(), QSettings::IniFormat);
+    settings.beginGroup(QString::fromLatin1(kAuthGroup));
+    settings.setValue(passwordKeyForRole(role), hashPassword(password));
+    settings.endGroup();
+    settings.sync();
+    return settings.status() == QSettings::NoError;
 }
 } // namespace
 
@@ -197,6 +259,7 @@ void SettingsPage::setupContentStack()
     connect(deviceSettingsPage, &DeviceSettingsPage::requestSaveFullScan, this, &SettingsPage::requestSaveFullScan);
     connect(deviceSettingsPage, &DeviceSettingsPage::requestSaveDeviceIp, this, &SettingsPage::requestSaveDeviceIp);
     connect(deviceSettingsPage, &DeviceSettingsPage::requestSaveTcpServerIp, this, &SettingsPage::requestSaveTcpServerIp);
+    connect(dataCollectionPage, &DataCollectionPage::requestUploadPatternFile, this, &SettingsPage::requestUploadPatternFile);
     connect(detectBandPage, &DetectBandPage::requestSaveDetectBands, this, &SettingsPage::requestSaveDetectBands);
     connect(modeSelectPage, &ModeSelectPage::requestSaveDroneReportMode, this, &SettingsPage::requestSaveDroneReportMode);
     connect(modeSelectPage, &ModeSelectPage::requestSaveJamMode, this, &SettingsPage::requestSaveJamMode);
@@ -243,9 +306,16 @@ void SettingsPage::setupContentStack()
     connect(systemFunctionPage, &SystemFunctionPage::requestSaveBuzzerEnabled, this, &SettingsPage::requestSaveBuzzerEnabled);
     connect(systemFunctionPage, &SystemFunctionPage::requestSaveSystemTime, this, &SettingsPage::requestSaveSystemTime);
     connect(systemFunctionPage, &SystemFunctionPage::requestQueryBuzzerEnabled, this, &SettingsPage::requestQueryBuzzerEnabled);
+    connect(systemFunctionPage, &SystemFunctionPage::requestQueryScreenFlashEnabled, this,
+            &SettingsPage::requestQueryScreenFlashEnabled);
     connect(systemFunctionPage, &SystemFunctionPage::requestSetScreenFlashEnabled, this,
             &SettingsPage::requestSetScreenFlashEnabled);
     connect(systemFunctionPage, &SystemFunctionPage::requestRebootDevice, this, &SettingsPage::requestRebootDevice);
+    connect(systemFunctionPage, &SystemFunctionPage::requestChangePassword, this,
+            [this](SettingsUserRole role, const QString &oldPassword, const QString &newPassword)
+            {
+                handlePasswordChangeRequest(role, oldPassword, newPassword);
+            });
     connect(modelLibraryPage, &ModelLibraryPage::requestSaveModelLibraryMode, this, &SettingsPage::requestSaveModelLibraryMode);
     connect(modelLibraryPage, &ModelLibraryPage::requestQueryModelLibraryMode, this, &SettingsPage::requestQueryModelLibraryMode);
     connect(modelLibraryPage, &ModelLibraryPage::requestQueryModelLibraryRecords, this,
@@ -294,6 +364,7 @@ void SettingsPage::bindSettingsViewSignals(QPushButton *logoutBtn)
         else if (currentWidget == systemFunctionPage)
         {
             emit requestQueryBuzzerEnabled();
+            emit requestQueryScreenFlashEnabled();
         }
         else if (currentWidget == modelLibraryPage)
         {
@@ -662,6 +733,16 @@ void SettingsPage::updateBuzzerEnabled(uint8_t enabled)
     systemFunctionPage->updateBuzzerEnabled(enabled);
 }
 
+void SettingsPage::updateScreenFlashEnabled(bool enabled)
+{
+    if (!systemFunctionPage)
+    {
+        return;
+    }
+
+    systemFunctionPage->updateScreenFlashEnabled(enabled);
+}
+
 void SettingsPage::updateBuzzerEnabledSaveResult(bool success, const QString &message)
 {
     if (!systemFunctionPage)
@@ -776,6 +857,16 @@ void SettingsPage::updateSignalSourceParamsSaveResult(bool success, const QStrin
     signalSourceParamsPage->showSaveResult(success, message);
 }
 
+void SettingsPage::updatePatternUploadResult(bool success, const QString &message)
+{
+    if (!dataCollectionPage)
+    {
+        return;
+    }
+
+    dataCollectionPage->showPatternUploadResult(success, message);
+}
+
 void SettingsPage::updateFirmwareVersions(const QString &appVersion, const QString &fpgaVersion, const QString &gpuVersion)
 {
     if (!firmwareVersionPage)
@@ -823,14 +914,14 @@ uint8_t SettingsPage::getCurrentLocationMode() const
 
 bool SettingsPage::authenticateUser(const QString &password)
 {
-    if (password == "root123")
+    if (verifyPasswordForRole(SettingsUserRole::Root, password))
     {
         currentUserRole = SettingsUserRole::Root;
         errorLabel->clear();
         return true;
     }
 
-    if (password == "admin")
+    if (verifyPasswordForRole(SettingsUserRole::Admin, password))
     {
         currentUserRole = SettingsUserRole::Admin;
         errorLabel->clear();
@@ -839,6 +930,42 @@ bool SettingsPage::authenticateUser(const QString &password)
 
     errorLabel->setText("密码错误，请重试");
     return false;
+}
+
+void SettingsPage::handlePasswordChangeRequest(SettingsUserRole role, const QString &oldPassword, const QString &newPassword)
+{
+    if (!systemFunctionPage)
+    {
+        return;
+    }
+
+    if (role != SettingsUserRole::Admin && role != SettingsUserRole::Root)
+    {
+        systemFunctionPage->showPasswordChangeResult(false, QStringLiteral("请选择要修改的密码类型"));
+        return;
+    }
+
+    if (currentUserRole != SettingsUserRole::Root && role == SettingsUserRole::Root)
+    {
+        systemFunctionPage->showPasswordChangeResult(false, QStringLiteral("当前账号无权修改高级管理员密码"));
+        return;
+    }
+
+    if (!verifyPasswordForRole(role, oldPassword))
+    {
+        systemFunctionPage->showPasswordChangeResult(false, QStringLiteral("旧密码输入错误"));
+        return;
+    }
+
+    if (!savePasswordForRole(role, newPassword))
+    {
+        systemFunctionPage->showPasswordChangeResult(false, QStringLiteral("密码保存失败，请检查配置目录权限"));
+        return;
+    }
+
+    const QString successMessage = role == SettingsUserRole::Root ? QStringLiteral("高级管理员密码修改成功，下次登录生效")
+                                                                  : QStringLiteral("普通管理员密码修改成功，下次登录生效");
+    systemFunctionPage->showPasswordChangeResult(true, successMessage);
 }
 
 void SettingsPage::resetSettingsContent()

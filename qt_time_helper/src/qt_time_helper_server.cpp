@@ -32,8 +32,8 @@ QString serverName()
 bool isAllowedProgramName(const QString &programName)
 {
     static const QStringList allowedProgramNames = {
-        QStringLiteral("qt_test"),
-        QStringLiteral("qt_testApp"),
+        QStringLiteral("qt"),
+        QStringLiteral("qtApp"),
     };
     return allowedProgramNames.contains(programName);
 }

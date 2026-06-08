@@ -103,6 +103,7 @@ void AppController::setupConnections()
     connect(tcpManager, &TcpManager::signalSourceParamsQueried, settingsPage, &SettingsPage::updateSignalSourceParams);
     connect(tcpManager, &TcpManager::signalSourceParamsSetResponse, settingsPage,
             &SettingsPage::updateSignalSourceParamsSaveResult);
+    connect(tcpManager, &TcpManager::patternUploadResponse, settingsPage, &SettingsPage::updatePatternUploadResult);
     connect(tcpManager, &TcpManager::fullScanParamsQueried, settingsPage, &SettingsPage::updateFullScanSettings);
     connect(tcpManager, &TcpManager::fullScanParamsSetResponse, settingsPage, &SettingsPage::updateFullScanSaveResult);
     connect(tcpManager, &TcpManager::deviceIpQueried, settingsPage, &SettingsPage::updateDeviceIpSettings);
@@ -144,6 +145,7 @@ void AppController::setupConnections()
     connect(settingsPage, &SettingsPage::requestSaveDirectionCalibrationValues, tcpManager,
             &TcpManager::setDirectionCalibrationValues);
     connect(settingsPage, &SettingsPage::requestSaveSignalSourceParams, tcpManager, &TcpManager::setSignalSourceParams);
+    connect(settingsPage, &SettingsPage::requestUploadPatternFile, tcpManager, &TcpManager::uploadPatternFile);
     connect(settingsPage, &SettingsPage::requestSaveFullScan, tcpManager, &TcpManager::setFullScanParams);
     connect(settingsPage, &SettingsPage::requestSaveDeviceIp, tcpManager, &TcpManager::setDeviceIp);
     connect(settingsPage, &SettingsPage::requestSaveTcpServerIp, tcpManager, &TcpManager::setTcpServerIp);

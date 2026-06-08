@@ -27,7 +27,7 @@ rm -rf .build
 
 # 2. 生成 Makefile
 echo "[2/4] 正在执行 qmake..."
-qmake qt_test.pro
+qmake qt.pro
 
 # 3. 多线程编译
 echo "[3/4] 正在编译 (make -j4)..."
@@ -41,4 +41,4 @@ echo "==================================="
 export DISPLAY=:0
 
 # 启动程序
-./qt_test
+./qt

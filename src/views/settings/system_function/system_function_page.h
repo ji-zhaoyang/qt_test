@@ -35,14 +35,18 @@ class SystemFunctionPage : public QWidget
     void requestSaveBuzzerEnabled(uint8_t enabled);
     void requestSaveSystemTime(const QDateTime &dateTime, const QString &timezoneId);
     void requestQueryBuzzerEnabled();
+    void requestQueryScreenFlashEnabled();
     void requestSetScreenFlashEnabled(bool enabled);
     void requestRebootDevice();
+    void requestChangePassword(SettingsUserRole role, const QString &oldPassword, const QString &newPassword);
 
   public slots:
     void updateBuzzerEnabled(uint8_t enabled);
+    void updateScreenFlashEnabled(bool enabled);
     void showSystemTimeSaveResult(bool success, const QString &message);
     void showAlarmSaveResult(bool success, const QString &message);
     void showRebootResult(bool success, const QString &message);
+    void showPasswordChangeResult(bool success, const QString &message);
 
   protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -60,6 +64,7 @@ class SystemFunctionPage : public QWidget
     QComboBox *createStyledTimezoneComboBox(QFrame *parent, int width) const;
     QLineEdit *createStyledLineEdit(QFrame *parent, const QString &text, int width) const;
     QLineEdit *createStyledPasswordEdit(QFrame *parent, const QString &placeholderText, int width) const;
+    QWidget *createPasswordField(QFrame *parent, const QString &placeholderText, int width, QLineEdit *&lineEdit) const;
     QDateTimeEdit *createStyledDateTimeEdit(QFrame *parent) const;
     QCheckBox *createStyledToggleSwitch(QFrame *parent, bool checked = false) const;
     QPushButton *createPrimaryButton(QFrame *parent, const QString &text, int width = 120) const;
@@ -79,6 +84,9 @@ class SystemFunctionPage : public QWidget
     void updateHelperStatusDisplay();
     void updateToastPosition();
     void showToastResult(bool success, const QString &message);
+    void handlePasswordSave();
+    void clearPasswordInputs();
+    SettingsUserRole selectedPasswordRole() const;
     QString extractDisplayMessage(bool success, const QString &message) const;
     QString sectionTitleStyle() const;
     QString formLabelStyle(bool required) const;

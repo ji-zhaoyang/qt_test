@@ -75,6 +75,7 @@ TcpManager::TcpManager(QObject *parent) : QObject(parent)
     qRegisterMetaType<AlarmHistoryInfo>("AlarmHistoryInfo");
     qRegisterMetaType<DeviceUsageInfo>("DeviceUsageInfo");
     qRegisterMetaType<SignalSourceParamsConfig>("SignalSourceParamsConfig");
+    qRegisterMetaType<PatternUploadRequest>("PatternUploadRequest");
     qRegisterMetaType<ModelLibraryPageResult>("ModelLibraryPageResult");
     qRegisterMetaType<ModelLibraryUpdateRequest>("ModelLibraryUpdateRequest");
 
@@ -139,6 +140,24 @@ void TcpManager::sendCommand(const QString &cmd)
 // 发包：统一封装协议头、载荷、校验和与包尾。
 void TcpManager::sendFrame(uint16_t dataType, const QByteArray &data)
 {
+    // #region debug-point C:send-frame-entry
+    if (dataType == 18)
+    {
+        qDebug().noquote()
+            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | 进入发送 | dataType=%1 payloadSize=%2 socketState=%3 target=%4:%5")
+                   .arg(QString::number(dataType),
+                        QString::number(data.size()),
+                        socketStateText(),
+                        lastConnectedIp,
+                        QString::number(lastConnectedPort));
+        qDebug().noquote()
+            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | payloadUtf8=%1").arg(QString::fromUtf8(data));
+        qDebug().noquote()
+            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | payloadHex=%1")
+                   .arg(QString::fromLatin1(data.toHex(' ').toUpper()));
+    }
+    // #endregion
+
     if (tcpSocket->state() != QAbstractSocket::ConnectedState)
     {
         qDebug() << "[TcpManager] 未连接服务器，无法发送命令 (DataType:" << dataType << ") 当前状态:" << socketStateText()
@@ -187,6 +206,20 @@ void TcpManager::sendFrame(uint16_t dataType, const QByteArray &data)
     tcpSocket->write(frame);
     tcpSocket->flush();
     rememberSentFrame(dataType, frame.size());
+
+    // #region debug-point C:send-frame-written
+    if (dataType == 18)
+    {
+        qDebug().noquote()
+            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | 已写入socket | frameSize=%1 checksum=%2 packageNum=%3")
+                   .arg(QString::number(frame.size()),
+                        QString::number(static_cast<int>(checksum)),
+                        QString::number(header.packageNum));
+        qDebug().noquote()
+            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | frameHex=%1")
+                   .arg(QString::fromLatin1(frame.toHex(' ').toUpper()));
+    }
+    // #endregion
 }
 
 bool TcpManager::isConnected() const
@@ -209,6 +242,17 @@ void TcpManager::onSocketConnected()
 void TcpManager::onSocketDisconnected()
 {
     lastDisconnectedAt = QDateTime::currentDateTime();
+    // #region debug-point E:socket-disconnected
+    qDebug().noquote()
+        << QStringLiteral("[DEBUG-E] tcp_manager.cpp:onSocketDisconnected | 连接断开 | lastSentDataType=%1 lastSentFrameLength=%2 "
+                          "lastReceivedDataType=%3 lastReceivedFrameLength=%4 socketState=%5 lastError=%6")
+               .arg(QString::number(lastSentDataType),
+                    QString::number(lastSentFrameLength),
+                    QString::number(lastReceivedDataType),
+                    QString::number(lastReceivedFrameLength),
+                    socketStateText(),
+                    lastSocketErrorText);
+    // #endregion
     qDebug() << "[TcpManager] TCP 连接已断开！";
     emit disconnected();
 
@@ -239,6 +283,14 @@ void TcpManager::onReconnectTimeout()
     }
 
     qDebug() << "[TcpManager] 正在尝试重新连接...";
+    // #region debug-point E:reconnect-attempt
+    qDebug().noquote()
+        << QStringLiteral("[DEBUG-E] tcp_manager.cpp:onReconnectTimeout | 开始重连 | target=%1:%2 lastSentDataType=%3 socketState=%4")
+               .arg(lastConnectedIp,
+                    QString::number(lastConnectedPort),
+                    QString::number(lastSentDataType),
+                    socketStateText());
+    // #endregion
     tcpSocket->connectToHost(lastConnectedIp, lastConnectedPort);
 }
 
@@ -376,6 +428,7 @@ void TcpManager::dispatchProtocol(const ProtocolHeader *header, const QByteArray
         dispatchStrikeFrequencyProtocol(header, frameData) || dispatchPowerAmplifierProtocol(header, frameData) ||
         dispatchDirectionCalibrationProtocol(header, frameData) ||
         dispatchSignalSourceParamsProtocol(header, frameData) ||
+        dispatchDataCollectionProtocol(header, frameData) ||
         dispatchFirmwareProtocol(header, frameData) ||
         dispatchDeviceOpsProtocol(header, frameData) ||
         dispatchGpsProtocol(header, frameData) || dispatchDetectBandProtocol(header, frameData) ||
@@ -395,6 +448,18 @@ void TcpManager::onSocketError(QTcpSocket::SocketError socketError)
     lastSocketError = socketError;
     lastSocketErrorText = tcpSocket->errorString();
     QString errorStr = tcpSocket->errorString();
+    // #region debug-point D:socket-error
+    qDebug().noquote()
+        << QStringLiteral("[DEBUG-D] tcp_manager.cpp:onSocketError | socket错误 | error=%1 code=%2 errorString=%3 "
+                          "socketState=%4 lastSentDataType=%5 lastSentFrameLength=%6 lastReceivedDataType=%7")
+               .arg(socketErrorText(socketError),
+                    QString::number(static_cast<int>(socketError)),
+                    errorStr,
+                    socketStateText(),
+                    QString::number(lastSentDataType),
+                    QString::number(lastSentFrameLength),
+                    QString::number(lastReceivedDataType));
+    // #endregion
     qDebug() << "[TcpManager] TCP 连接错误:" << socketErrorText(socketError) << "(" << static_cast<int>(socketError)
              << ")" << errorStr;
 

@@ -1,5 +1,9 @@
 #include "data_collection_page.h"
+#include <QAbstractSpinBox>
 #include <QButtonGroup>
+#include <QDateTime>
+#include <QDebug>
+#include <QDir>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -11,10 +15,23 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+namespace
+{
+const char *const kDefaultFtpIp = "10.0.76.153";
+const int kDefaultFtpPort = 21;
+const char *const kDefaultFtpUser = "finsung";
+const char *const kDefaultFtpPassword = "finsung";
+const char *const kDefaultCollectionFtpPath = "/home/finsung/collection";
+const char *const kDefaultRealtimeFtpPath = "/home/finsung/timely";
+const double kDefaultFreq = 1.0;
+}
+
 DataCollectionPage::DataCollectionPage(QWidget *parent)
-    : QWidget(parent), fileNameEdit(nullptr), collectRadio(nullptr), realTimeRadio(nullptr), modeGroup(nullptr),
-      collectionTimeSpinBox(nullptr), channelEdit(nullptr), startButton(nullptr), clearButton(nullptr),
-      fileListWidget(nullptr), emptyStateIconLabel(nullptr), emptyStateTextLabel(nullptr)
+    : QWidget(parent), collectRadio(nullptr), realTimeRadio(nullptr), modeGroup(nullptr), fileNameEdit(nullptr),
+      collectionTimeRow(nullptr), collectionTimeSeparator(nullptr), collectionTimeSpinBox(nullptr), channelRow(nullptr),
+      channelSeparator(nullptr), channelSpinBox(nullptr), startButton(nullptr), clearButton(nullptr),
+      filesTitleLabel(nullptr), fileListWidget(nullptr), emptyStateIconLabel(nullptr), emptyStateTextLabel(nullptr),
+      statusLabel(nullptr)
 {
     setupUi();
 }
@@ -62,7 +79,7 @@ void DataCollectionPage::setupUi()
     cardLayout->setSpacing(0);
 
     fileNameEdit = new QLineEdit(card);
-    fileNameEdit->setPlaceholderText(QStringLiteral("请输入"));
+    fileNameEdit->setPlaceholderText(QStringLiteral("可留空，设备自动生成"));
     fileNameEdit->setFixedSize(150, 34);
     fileNameEdit->setStyleSheet(inputStyle());
     cardLayout->addWidget(createFormRow(card, QStringLiteral("文件名"), fileNameEdit));
@@ -71,15 +88,27 @@ void DataCollectionPage::setupUi()
     cardLayout->addWidget(createModeRow(card));
     cardLayout->addWidget(createSeparatorLine(card));
 
-    cardLayout->addWidget(createTimeRow(card));
-    cardLayout->addWidget(createSeparatorLine(card));
+    collectionTimeSpinBox = new QSpinBox(card);
+    collectionTimeSpinBox->setRange(1, 8);
+    collectionTimeSpinBox->setValue(1);
+    collectionTimeSpinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    collectionTimeSpinBox->setFixedSize(150, 34);
+    collectionTimeSpinBox->setStyleSheet(inputStyle());
+    collectionTimeRow = createFormRow(card, QStringLiteral("采集时间"), collectionTimeSpinBox);
+    collectionTimeSeparator = createSeparatorLine(card);
+    cardLayout->addWidget(collectionTimeRow);
+    cardLayout->addWidget(collectionTimeSeparator);
 
-    channelEdit = new QLineEdit(card);
-    channelEdit->setText(QStringLiteral("1"));
-    channelEdit->setFixedSize(150, 34);
-    channelEdit->setStyleSheet(inputStyle());
-    cardLayout->addWidget(createFormRow(card, QStringLiteral("采集通道"), channelEdit));
-    cardLayout->addWidget(createSeparatorLine(card));
+    channelSpinBox = new QSpinBox(card);
+    channelSpinBox->setRange(1, 4);
+    channelSpinBox->setValue(1);
+    channelSpinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    channelSpinBox->setFixedSize(150, 34);
+    channelSpinBox->setStyleSheet(inputStyle());
+    channelRow = createFormRow(card, QStringLiteral("采集通道"), channelSpinBox);
+    channelSeparator = createSeparatorLine(card);
+    cardLayout->addWidget(channelRow);
+    cardLayout->addWidget(channelSeparator);
 
     QWidget *actionRow = new QWidget(card);
     actionRow->setStyleSheet("background-color: transparent;");
@@ -94,10 +123,172 @@ void DataCollectionPage::setupUi()
     actionLayout->addStretch();
     cardLayout->addWidget(actionRow);
 
+    statusLabel = new QLabel(card);
+    statusLabel->setVisible(false);
+    statusLabel->setWordWrap(true);
+    statusLabel->setStyleSheet("font-size: 13px; padding: 0 0 14px 0;");
+    cardLayout->addWidget(statusLabel);
+
     QWidget *filesSection = createFilesSection(card);
     cardLayout->addWidget(filesSection);
 
     pageLayout->addStretch();
+
+    connect(startButton, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (!fileNameEdit || !modeGroup || !collectionTimeSpinBox || !channelSpinBox)
+                {
+                    return;
+                }
+
+                PatternUploadRequest request;
+                request.ip = QString::fromLatin1(kDefaultFtpIp);
+                request.port = kDefaultFtpPort;
+                request.user = QString::fromLatin1(kDefaultFtpUser);
+                request.password = QString::fromLatin1(kDefaultFtpPassword);
+                request.path = request.type == 2 ? QString::fromLatin1(kDefaultRealtimeFtpPath)
+                                                 : QString::fromLatin1(kDefaultCollectionFtpPath);
+                request.filename = fileNameEdit->text().trimmed();
+                request.time = collectionTimeSpinBox->value();
+                request.type = modeGroup->checkedId();
+                request.channel = channelSpinBox->value();
+                request.freq = kDefaultFreq;
+
+                // #region debug-point A:data-collection-click
+                qDebug().noquote()
+                    << QStringLiteral("[DEBUG-A] data_collection_page.cpp:startButton | 点击开始采集 | "
+                                      "filename=\"%1\" type=%2 time=%3 channel=%4 freq=%5 ftp=%6:%7 user=%8 path=%9")
+                           .arg(request.filename,
+                                QString::number(request.type),
+                                QString::number(request.time),
+                                QString::number(request.channel),
+                                QString::number(request.freq, 'f', 1),
+                                request.ip,
+                                QString::number(request.port),
+                                request.user,
+                                request.path);
+                // #endregion
+
+                if (request.type != 1 && request.type != 2)
+                {
+                    showStatusMessage(false, QStringLiteral("请选择采集类型"));
+                    return;
+                }
+
+                showStatusMessage(true, QStringLiteral("任务已下发，等待设备应答..."));
+                emit requestUploadPatternFile(request);
+            });
+
+    connect(clearButton, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (!fileListWidget)
+                {
+                    return;
+                }
+
+                const QDir dir(currentModeDirectoryPath());
+                if (!dir.exists())
+                {
+                    refreshCurrentFileList();
+                    return;
+                }
+
+                const QFileInfoList fileInfos =
+                    dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot, QDir::Time | QDir::Reversed);
+                for (const QFileInfo &fileInfo : fileInfos)
+                {
+                    QFile::remove(fileInfo.absoluteFilePath());
+                }
+                refreshCurrentFileList();
+            });
+
+    connect(modeGroup, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked), this,
+            [this](int)
+            {
+                updateModeFieldVisibility();
+                updateFilesSectionForMode();
+            });
+
+    updateModeFieldVisibility();
+    updateFilesSectionForMode();
+}
+
+void DataCollectionPage::updateModeFieldVisibility()
+{
+    const bool isRealtimeMode = modeGroup && modeGroup->checkedId() == 2;
+
+    if (collectionTimeRow)
+    {
+        collectionTimeRow->setVisible(!isRealtimeMode);
+    }
+    if (collectionTimeSeparator)
+    {
+        collectionTimeSeparator->setVisible(!isRealtimeMode);
+    }
+    if (channelRow)
+    {
+        channelRow->setVisible(!isRealtimeMode);
+    }
+    if (channelSeparator)
+    {
+        channelSeparator->setVisible(!isRealtimeMode);
+    }
+}
+
+void DataCollectionPage::refreshCurrentFileList()
+{
+    if (!fileListWidget)
+    {
+        return;
+    }
+
+    fileListWidget->clear();
+
+    const QDir dir(currentModeDirectoryPath());
+    if (dir.exists())
+    {
+        const QFileInfoList fileInfos =
+            dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot, QDir::Time | QDir::Reversed);
+        for (const QFileInfo &fileInfo : fileInfos)
+        {
+            const QString itemText =
+                QStringLiteral("%1  (%2)")
+                    .arg(fileInfo.fileName(),
+                         fileInfo.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
+            fileListWidget->addItem(itemText);
+        }
+    }
+    updateFileListVisibility();
+}
+
+void DataCollectionPage::updateFilesSectionForMode()
+{
+    const bool isRealtimeMode = currentModeType() == 2;
+
+    if (filesTitleLabel)
+    {
+        filesTitleLabel->setText(isRealtimeMode ? QStringLiteral("实时数据文件列表") : QStringLiteral("长数据文件列表"));
+    }
+    if (emptyStateTextLabel)
+    {
+        emptyStateTextLabel->setText(isRealtimeMode ? QStringLiteral("暂无实时数据文件记录")
+                                                    : QStringLiteral("暂无长数据文件记录"));
+    }
+
+    refreshCurrentFileList();
+}
+
+int DataCollectionPage::currentModeType() const
+{
+    return modeGroup ? modeGroup->checkedId() : 1;
+}
+
+QString DataCollectionPage::currentModeDirectoryPath() const
+{
+    return currentModeType() == 2 ? QString::fromLatin1(kDefaultRealtimeFtpPath)
+                                  : QString::fromLatin1(kDefaultCollectionFtpPath);
 }
 
 QWidget *DataCollectionPage::createSeparatorLine(QWidget *parent) const
@@ -135,7 +326,7 @@ QWidget *DataCollectionPage::createModeRow(QWidget *parent)
     rowLayout->setContentsMargins(0, 14, 0, 14);
     rowLayout->setSpacing(10);
 
-    QLabel *label = new QLabel(QStringLiteral("模式"), rowWidget);
+    QLabel *label = new QLabel(QStringLiteral("采集类型"), rowWidget);
     label->setStyleSheet(rowLabelStyle());
     label->setFixedWidth(180);
     rowLayout->addWidget(label);
@@ -147,56 +338,19 @@ QWidget *DataCollectionPage::createModeRow(QWidget *parent)
     modeLayout->setContentsMargins(0, 0, 0, 0);
     modeLayout->setSpacing(20);
 
-    collectRadio = new QRadioButton(QStringLiteral("采集"), modeWidget);
-    realTimeRadio = new QRadioButton(QStringLiteral("实时"), modeWidget);
+    collectRadio = new QRadioButton(QStringLiteral("采集长数据"), modeWidget);
+    realTimeRadio = new QRadioButton(QStringLiteral("采集实时数据"), modeWidget);
     collectRadio->setChecked(true);
     collectRadio->setStyleSheet("QRadioButton { color: #e6e6e6; font-size: 14px; }");
     realTimeRadio->setStyleSheet("QRadioButton { color: #e6e6e6; font-size: 14px; }");
 
     modeGroup = new QButtonGroup(this);
-    modeGroup->addButton(collectRadio, 0);
-    modeGroup->addButton(realTimeRadio, 1);
+    modeGroup->addButton(collectRadio, 1);
+    modeGroup->addButton(realTimeRadio, 2);
 
     modeLayout->addWidget(collectRadio);
     modeLayout->addWidget(realTimeRadio);
     rowLayout->addWidget(modeWidget, 0, Qt::AlignRight | Qt::AlignVCenter);
-    return rowWidget;
-}
-
-QWidget *DataCollectionPage::createTimeRow(QWidget *parent)
-{
-    QWidget *rowWidget = new QWidget(parent);
-    rowWidget->setStyleSheet("background-color: transparent;");
-
-    QHBoxLayout *rowLayout = new QHBoxLayout(rowWidget);
-    rowLayout->setContentsMargins(0, 15, 0, 15);
-    rowLayout->setSpacing(10);
-
-    QLabel *label = new QLabel(QStringLiteral("采集时间"), rowWidget);
-    label->setStyleSheet(rowLabelStyle());
-    label->setFixedWidth(180);
-    rowLayout->addWidget(label);
-    rowLayout->addStretch();
-
-    QWidget *timeWidget = new QWidget(rowWidget);
-    timeWidget->setStyleSheet("background-color: transparent;");
-    QHBoxLayout *timeLayout = new QHBoxLayout(timeWidget);
-    timeLayout->setContentsMargins(0, 0, 0, 0);
-    timeLayout->setSpacing(6);
-
-    collectionTimeSpinBox = new QSpinBox(timeWidget);
-    collectionTimeSpinBox->setRange(1, 9999);
-    collectionTimeSpinBox->setValue(4);
-    collectionTimeSpinBox->setButtonSymbols(QAbstractSpinBox::NoButtons);
-    collectionTimeSpinBox->setFixedSize(76, 34);
-    collectionTimeSpinBox->setStyleSheet(inputStyle());
-
-    QLabel *unitLabel = new QLabel(QStringLiteral("秒"), timeWidget);
-    unitLabel->setStyleSheet("color: #bdbdbd; font-size: 14px;");
-
-    timeLayout->addWidget(collectionTimeSpinBox);
-    timeLayout->addWidget(unitLabel);
-    rowLayout->addWidget(timeWidget, 0, Qt::AlignRight | Qt::AlignVCenter);
     return rowWidget;
 }
 
@@ -215,9 +369,9 @@ QWidget *DataCollectionPage::createFilesSection(QWidget *parent)
     titleLayout->setContentsMargins(0, 0, 0, 0);
     titleLayout->setSpacing(0);
 
-    QLabel *title = new QLabel(QStringLiteral("采集模式文件列表"), titleRow);
-    title->setStyleSheet(listTitleStyle());
-    titleLayout->addWidget(title);
+    filesTitleLabel = new QLabel(QStringLiteral("长数据文件列表"), titleRow);
+    filesTitleLabel->setStyleSheet(listTitleStyle());
+    titleLayout->addWidget(filesTitleLabel);
     titleLayout->addStretch();
 
     clearButton = new QPushButton(QStringLiteral("清空文件"), titleRow);
@@ -253,7 +407,7 @@ QWidget *DataCollectionPage::createFilesSection(QWidget *parent)
     emptyStateIconLabel->setAlignment(Qt::AlignCenter);
     emptyStateIconLabel->setStyleSheet("font-size: 42px; color: #9a9a9a;");
 
-    emptyStateTextLabel = new QLabel(QStringLiteral("暂无文件"), emptyState);
+    emptyStateTextLabel = new QLabel(QStringLiteral("暂无 pattern 文件记录"), emptyState);
     emptyStateTextLabel->setAlignment(Qt::AlignCenter);
     emptyStateTextLabel->setStyleSheet(emptyStateTextStyle());
 
@@ -303,4 +457,64 @@ QString DataCollectionPage::listTitleStyle() const
 QString DataCollectionPage::emptyStateTextStyle() const
 {
     return QStringLiteral("color: #a8a8a8; font-size: 13px;");
+}
+
+void DataCollectionPage::showPatternUploadResult(bool success, const QString &message)
+{
+    showStatusMessage(success, message);
+    if (success)
+    {
+        refreshCurrentFileList();
+    }
+}
+
+void DataCollectionPage::updateFileListVisibility()
+{
+    const bool hasItems = fileListWidget && fileListWidget->count() > 0;
+    if (fileListWidget)
+    {
+        fileListWidget->setVisible(hasItems);
+    }
+    if (emptyStateIconLabel)
+    {
+        emptyStateIconLabel->setVisible(!hasItems);
+    }
+    if (emptyStateTextLabel)
+    {
+        emptyStateTextLabel->setVisible(!hasItems);
+    }
+}
+
+void DataCollectionPage::showStatusMessage(bool success, const QString &message)
+{
+    if (!statusLabel)
+    {
+        return;
+    }
+
+    statusLabel->setVisible(true);
+    statusLabel->setStyleSheet(success ? QStringLiteral("color: #67c23a; font-size: 13px; padding: 0 0 14px 0;")
+                                       : QStringLiteral("color: #ff6a55; font-size: 13px; padding: 0 0 14px 0;"));
+    statusLabel->setText(extractDisplayMessage(message));
+}
+
+QString DataCollectionPage::extractDisplayMessage(const QString &message) const
+{
+    const QString trimmed = message.trimmed();
+    if (trimmed.isEmpty())
+    {
+        return QStringLiteral("设备未返回结果");
+    }
+
+    const int infoPos = trimmed.indexOf(QStringLiteral("Info:"));
+    if (infoPos >= 0)
+    {
+        const QString infoText = trimmed.mid(infoPos + 5).trimmed();
+        if (!infoText.isEmpty())
+        {
+            return infoText;
+        }
+    }
+
+    return trimmed;
 }

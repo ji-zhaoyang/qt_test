@@ -1,11 +1,11 @@
 # qt_time_helper
 
-`qt_time_helper` 是给 `qt_test` 提供本地高权限设时能力的辅助服务。
+`qt_time_helper` 是给 `qt` 提供本地高权限设时能力的辅助服务。
 
 ## 作用
 
 - 监听本机 `QLocalSocket`
-- 接收 `qt_test` 发来的设时请求
+- 接收 `qt` 发来的设时请求
 - 以 root 权限执行：
   - `timedatectl set-timezone`
   - `timedatectl set-time`
@@ -64,5 +64,5 @@ journalctl -u qt-time-helper -f
 - 时间范围限制为 `2020-01-01` 到 `2100-12-31`
 - 本地 socket 不再只限 owner 访问，真正的访问控制由服务端调用方校验负责
 - Linux 下仅允许白名单进程名通过本地 socket 调用，当前默认允许：
-  - `qt_test`
-  - `qt_testApp`
+  - `qt`
+  - `qtApp`

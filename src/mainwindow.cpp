@@ -35,12 +35,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), appController(nul
     connectNavigation(topNavBar);
     connectController(topNavBar);
     connect(pageSettings, &SettingsPage::requestSetScreenFlashEnabled, this,
-            [this](bool enabled)
+            [this, pageSettings](bool enabled)
             {
                 if (screenFlashOverlay)
                 {
                     screenFlashOverlay->setFlashingEnabled(enabled);
+                    pageSettings->updateScreenFlashEnabled(screenFlashOverlay->isFlashingEnabled());
                 }
+            });
+    connect(pageSettings, &SettingsPage::requestQueryScreenFlashEnabled, this,
+            [this, pageSettings]()
+            {
+                pageSettings->updateScreenFlashEnabled(screenFlashOverlay && screenFlashOverlay->isFlashingEnabled());
             });
 }
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=qt_test local qt_time_helper
+Description=qt local qt_time_helper
 After=network.target
 
 [Service]

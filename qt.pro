@@ -2,7 +2,7 @@ QT += core gui network websockets webenginewidgets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-TARGET = qt_test
+TARGET = qt
 TEMPLATE = app
 
 # Keep generated build artifacts out of the project root.
@@ -26,6 +26,7 @@ SOURCES += \
         src/network/device_ops/tcp_manager_angle_calibration.cpp \
         src/network/device_base/tcp_manager_device_base.cpp \
         src/network/settings/tcp_manager_detect_band.cpp \
+        src/network/settings/tcp_manager_data_collection.cpp \
         src/network/settings/tcp_manager_direction_calibration_value.cpp \
         src/network/device_ops/tcp_manager_device_ops.cpp \
         src/network/firmware/tcp_manager_firmware.cpp \

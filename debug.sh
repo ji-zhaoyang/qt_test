@@ -27,7 +27,7 @@ rm -rf .build
 
 # 2. 生成 Debug Makefile
 echo "[2/3] 正在执行 qmake (CONFIG+=debug)..."
-qmake "CONFIG+=debug" qt_test.pro
+qmake "CONFIG+=debug" qt.pro
 
 # 3. 多线程编译 Debug 版本
 echo "[3/3] 正在编译 Debug 版本 (make -j4)..."
@@ -36,7 +36,7 @@ make -j4
 echo "==================================="
 echo "Debug 编译完成。"
 echo "下一步可执行："
-echo "  gdb ./qt_test"
+echo "  gdb ./qt"
 echo "如果需要图形界面环境，可在 gdb 中执行："
 echo "  set env DISPLAY :0"
 echo "==================================="

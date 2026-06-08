@@ -196,6 +196,20 @@ struct SignalSourceParamsConfig
     QVector<int> vcoScans = QVector<int>(6, 0);
 };
 
+struct PatternUploadRequest
+{
+    QString ip;
+    int port = 21;
+    QString user;
+    QString password;
+    QString path;
+    int time = 4;
+    int type = 1;
+    QString filename;
+    int channel = 1;
+    double freq = 0.0;
+};
+
 struct ModelLibraryFreqBand
 {
     int start = 0;
@@ -246,6 +260,7 @@ Q_DECLARE_METATYPE(DirectionCalibrationValueList)
 Q_DECLARE_METATYPE(AlarmHistoryInfo)
 Q_DECLARE_METATYPE(DeviceUsageInfo)
 Q_DECLARE_METATYPE(SignalSourceParamsConfig)
+Q_DECLARE_METATYPE(PatternUploadRequest)
 Q_DECLARE_METATYPE(ModelLibraryFreqBand)
 Q_DECLARE_METATYPE(QVector<ModelLibraryFreqBand>)
 Q_DECLARE_METATYPE(ModelLibraryRecord)

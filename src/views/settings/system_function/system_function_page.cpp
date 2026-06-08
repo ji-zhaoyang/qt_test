@@ -16,6 +16,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QLocale>
+#include <QPainter>
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QRadioButton>
@@ -25,6 +26,7 @@
 #include <QStorageInfo>
 #include <QTimer>
 #include <QTimeZone>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace
@@ -95,6 +97,54 @@ QString helperStatusSummary(const LocalTimeServiceResult &result)
 
     return QStringLiteral("服务异常：%1").arg(message.isEmpty() ? QStringLiteral("qt_time_helper 返回异常") : message);
 }
+
+QIcon createPasswordEyeIcon(bool visible)
+{
+    QPixmap pixmap(18, 18);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+
+    QPen pen(QColor(QStringLiteral("#8f949c")));
+    pen.setWidthF(1.6);
+    pen.setCapStyle(Qt::RoundCap);
+    pen.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    QPainterPath eyePath;
+    eyePath.moveTo(2.0, 9.0);
+    eyePath.quadTo(9.0, 2.5, 16.0, 9.0);
+    eyePath.quadTo(9.0, 15.5, 2.0, 9.0);
+    painter.drawPath(eyePath);
+
+    if (visible)
+    {
+        painter.setBrush(QColor(QStringLiteral("#8f949c")));
+        painter.drawEllipse(QPointF(9.0, 9.0), 2.1, 2.1);
+    }
+    else
+    {
+        painter.drawEllipse(QPointF(9.0, 9.0), 2.1, 2.1);
+        painter.drawLine(QPointF(3.0, 15.0), QPointF(15.0, 3.0));
+    }
+
+    return QIcon(pixmap);
+}
+
+void updatePasswordFieldFont(QLineEdit *lineEdit)
+{
+    if (!lineEdit)
+    {
+        return;
+    }
+
+    QFont font = lineEdit->font();
+    const bool useCompactMask = lineEdit->echoMode() == QLineEdit::Password && !lineEdit->text().isEmpty();
+    font.setPointSize(useCompactMask ? 9 : 11);
+    lineEdit->setFont(font);
+}
 } // namespace
 
 SystemFunctionPage::SystemFunctionPage(QWidget *parent)
@@ -127,6 +177,20 @@ void SystemFunctionPage::setUserRole(SettingsUserRole role)
     {
         changePasswordFrame->setVisible(currentUserRole == SettingsUserRole::Root);
     }
+    if (advancedAdminPasswordRadio)
+    {
+        const bool canEditRootPassword = currentUserRole == SettingsUserRole::Root;
+        advancedAdminPasswordRadio->setEnabled(canEditRootPassword);
+        if (!canEditRootPassword)
+        {
+            advancedAdminPasswordRadio->setChecked(false);
+        }
+    }
+    if (normalAdminPasswordRadio && (!advancedAdminPasswordRadio || !advancedAdminPasswordRadio->isChecked()))
+    {
+        normalAdminPasswordRadio->setChecked(true);
+    }
+    clearPasswordInputs();
 }
 
 void SystemFunctionPage::setupUi()
@@ -310,22 +374,24 @@ void SystemFunctionPage::setupUi()
     passwordLayout->addWidget(createFormRow(changePasswordFrame, QStringLiteral("密码类型"), passwordTypeWidget));
     passwordLayout->addWidget(createSeparatorLine(changePasswordFrame));
 
-    oldPasswordEdit = createStyledPasswordEdit(changePasswordFrame, QStringLiteral("请输入旧密码"), 182);
-    passwordLayout->addWidget(createFormRow(changePasswordFrame, QStringLiteral("旧密码"), oldPasswordEdit, true));
+    QWidget *oldPasswordField = createPasswordField(changePasswordFrame, QStringLiteral("请输入旧密码"), 182, oldPasswordEdit);
+    passwordLayout->addWidget(createFormRow(changePasswordFrame, QStringLiteral("旧密码"), oldPasswordField, true));
     passwordLayout->addWidget(createSeparatorLine(changePasswordFrame));
 
-    newPasswordEdit = createStyledPasswordEdit(changePasswordFrame, QStringLiteral("请输入新密码"), 182);
-    passwordLayout->addWidget(createFormRow(changePasswordFrame, QStringLiteral("新密码"), newPasswordEdit, true));
+    QWidget *newPasswordField = createPasswordField(changePasswordFrame, QStringLiteral("请输入新密码"), 182, newPasswordEdit);
+    passwordLayout->addWidget(createFormRow(changePasswordFrame, QStringLiteral("新密码"), newPasswordField, true));
     passwordLayout->addWidget(createSeparatorLine(changePasswordFrame));
 
-    confirmPasswordEdit = createStyledPasswordEdit(changePasswordFrame, QStringLiteral("请再次输入新密码"), 182);
-    passwordLayout->addWidget(createFormRow(changePasswordFrame, QStringLiteral("确认新密码"), confirmPasswordEdit, true));
+    QWidget *confirmPasswordField =
+        createPasswordField(changePasswordFrame, QStringLiteral("请再次输入新密码"), 182, confirmPasswordEdit);
+    passwordLayout->addWidget(createFormRow(changePasswordFrame, QStringLiteral("确认新密码"), confirmPasswordField, true));
     passwordLayout->addWidget(createSeparatorLine(changePasswordFrame));
 
     QHBoxLayout *passwordButtonLayout = new QHBoxLayout();
     passwordButtonLayout->setContentsMargins(0, 16, 0, 0);
     passwordButtonLayout->setSpacing(0);
     changePasswordSaveButton = createPrimaryButton(changePasswordFrame, QStringLiteral("保存"));
+    connect(changePasswordSaveButton, &QPushButton::clicked, this, &SystemFunctionPage::handlePasswordSave);
     passwordButtonLayout->addWidget(changePasswordSaveButton);
     passwordButtonLayout->addStretch();
     passwordLayout->addLayout(passwordButtonLayout);
@@ -339,6 +405,16 @@ void SystemFunctionPage::updateBuzzerEnabled(uint8_t enabled)
     }
 
     alarmVoiceToggle->setChecked(enabled == 1);
+}
+
+void SystemFunctionPage::updateScreenFlashEnabled(bool enabled)
+{
+    if (!screenFlashToggle)
+    {
+        return;
+    }
+
+    screenFlashToggle->setChecked(enabled);
 }
 
 void SystemFunctionPage::showAlarmSaveResult(bool success, const QString &message)
@@ -387,6 +463,15 @@ void SystemFunctionPage::updateHelperStatusDisplay()
 void SystemFunctionPage::showRebootResult(bool success, const QString &message)
 {
     showToastResult(success, success ? QStringLiteral("重启指令已下发") : message);
+}
+
+void SystemFunctionPage::showPasswordChangeResult(bool success, const QString &message)
+{
+    if (success)
+    {
+        clearPasswordInputs();
+    }
+    showToastResult(success, message);
 }
 
 void SystemFunctionPage::resizeEvent(QResizeEvent *event)
@@ -596,9 +681,51 @@ QLineEdit *SystemFunctionPage::createStyledPasswordEdit(QFrame *parent, const QS
     lineEdit->setEchoMode(QLineEdit::Password);
     lineEdit->setFixedSize(width, 32);
     lineEdit->setStyleSheet("QLineEdit { background-color: #101113; color: #ffffff; border: 1px solid #2d2d2d; "
-                            "border-radius: 2px; padding: 0 10px; font-size: 14px; }"
+                            "border-radius: 2px; padding: 0 10px; }"
                             "QLineEdit::placeholder { color: #666666; }");
+    updatePasswordFieldFont(lineEdit);
     return lineEdit;
+}
+
+QWidget *SystemFunctionPage::createPasswordField(QFrame *parent, const QString &placeholderText, int width,
+                                                 QLineEdit *&lineEdit) const
+{
+    QWidget *fieldWidget = new QWidget(parent);
+    fieldWidget->setStyleSheet("background-color: transparent;");
+
+    QHBoxLayout *fieldLayout = new QHBoxLayout(fieldWidget);
+    fieldLayout->setContentsMargins(0, 0, 0, 0);
+    fieldLayout->setSpacing(8);
+
+    lineEdit = createStyledPasswordEdit(parent, placeholderText, width);
+    lineEdit->setParent(fieldWidget);
+    fieldLayout->addWidget(lineEdit);
+
+    QToolButton *toggleButton = new QToolButton(fieldWidget);
+    toggleButton->setCheckable(true);
+    toggleButton->setCursor(Qt::PointingHandCursor);
+    toggleButton->setFixedSize(32, 32);
+    toggleButton->setIcon(createPasswordEyeIcon(false));
+    toggleButton->setIconSize(QSize(18, 18));
+    toggleButton->setToolTip(QStringLiteral("显示密码"));
+    toggleButton->setStyleSheet("QToolButton { background-color: transparent; border: none; padding: 0px; }"
+                                "QToolButton:hover { background-color: #2b2b2f; border-radius: 2px; }"
+                                "QToolButton:pressed { background-color: #323238; border-radius: 2px; }");
+    connect(toggleButton, &QPushButton::toggled, lineEdit,
+            [lineEdit, toggleButton](bool checked)
+            {
+                lineEdit->setEchoMode(checked ? QLineEdit::Normal : QLineEdit::Password);
+                toggleButton->setIcon(createPasswordEyeIcon(checked));
+                toggleButton->setToolTip(checked ? QStringLiteral("隐藏密码") : QStringLiteral("显示密码"));
+                updatePasswordFieldFont(lineEdit);
+            });
+    connect(lineEdit, &QLineEdit::textChanged, lineEdit,
+            [lineEdit](const QString &)
+            {
+                updatePasswordFieldFont(lineEdit);
+            });
+    fieldLayout->addWidget(toggleButton);
+    return fieldWidget;
 }
 
 QDateTimeEdit *SystemFunctionPage::createStyledDateTimeEdit(QFrame *parent) const
@@ -1236,6 +1363,76 @@ void SystemFunctionPage::showToastResult(bool success, const QString &message)
     toastFadeInAnimation->stop();
     toastFadeInAnimation->start();
     toastHideTimer->start(2200);
+}
+
+void SystemFunctionPage::handlePasswordSave()
+{
+    if (!oldPasswordEdit || !newPasswordEdit || !confirmPasswordEdit)
+    {
+        return;
+    }
+
+    const SettingsUserRole targetRole = selectedPasswordRole();
+    if (targetRole == SettingsUserRole::None)
+    {
+        showToastResult(false, QStringLiteral("请选择要修改的密码类型"));
+        return;
+    }
+
+    const QString oldPassword = oldPasswordEdit->text();
+    const QString newPassword = newPasswordEdit->text();
+    const QString confirmPassword = confirmPasswordEdit->text();
+
+    if (oldPassword.trimmed().isEmpty() || newPassword.trimmed().isEmpty() || confirmPassword.trimmed().isEmpty())
+    {
+        showToastResult(false, QStringLiteral("请完整填写旧密码、新密码和确认新密码"));
+        return;
+    }
+
+    if (newPassword != confirmPassword)
+    {
+        showToastResult(false, QStringLiteral("两次输入的新密码不一致"));
+        return;
+    }
+
+    if (oldPassword == newPassword)
+    {
+        showToastResult(false, QStringLiteral("新密码不能与旧密码相同"));
+        return;
+    }
+
+    emit requestChangePassword(targetRole, oldPassword, newPassword);
+}
+
+void SystemFunctionPage::clearPasswordInputs()
+{
+    if (oldPasswordEdit)
+    {
+        oldPasswordEdit->clear();
+    }
+    if (newPasswordEdit)
+    {
+        newPasswordEdit->clear();
+    }
+    if (confirmPasswordEdit)
+    {
+        confirmPasswordEdit->clear();
+    }
+}
+
+SettingsUserRole SystemFunctionPage::selectedPasswordRole() const
+{
+    if (advancedAdminPasswordRadio && advancedAdminPasswordRadio->isChecked() && advancedAdminPasswordRadio->isEnabled())
+    {
+        return SettingsUserRole::Root;
+    }
+
+    if (normalAdminPasswordRadio && normalAdminPasswordRadio->isChecked())
+    {
+        return SettingsUserRole::Admin;
+    }
+
+    return SettingsUserRole::None;
 }
 
 QString SystemFunctionPage::extractDisplayMessage(bool success, const QString &message) const
