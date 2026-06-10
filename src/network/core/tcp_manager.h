@@ -8,6 +8,12 @@
 #include <QTimer>
 #include "protocol_types.h"
 
+class DroneOpsService;
+class DeviceOpsService;
+class CalibrationService;
+class SpectrumService;
+class SettingsProtocolService;
+
 class TcpManager : public QObject
 {
     Q_OBJECT
@@ -52,7 +58,6 @@ public:
     void queryModelLibraryMode();                                     // DataType 203
     void setModelLibraryRecord(const ModelLibraryUpdateRequest &request); // DataType 205
     void queryModelLibraryRecords(const ModelLibraryPageQuery &query);    // DataType 207
-    void queryJammingBands();                                         // DataType 98
     void queryFirmwareVersions();                                     // DataType 14
     void setDeviceGps(uint8_t mode, float lng, float lat, float alt); // DataType 57
     void queryDeviceGps();                                            // DataType 59
@@ -150,6 +155,11 @@ private slots:
     void onReconnectTimeout();
 
 private:
+    DroneOpsService *droneOpsService;
+    DeviceOpsService *deviceOpsService;
+    CalibrationService *calibrationService;
+    SpectrumService *spectrumService;
+    SettingsProtocolService *settingsProtocolService;
     QTcpSocket *tcpSocket;
     QByteArray m_buffer; // 用于处理TCP粘包/半包的缓冲区
     QTimer *reconnectTimer;
@@ -159,9 +169,6 @@ private:
     uint16_t lastReceivedDataType = 0;
     int lastSentFrameLength = 0;
     int lastReceivedFrameLength = 0;
-    bool pendingFullSpectrumEnabled = false;
-    int pendingDeviceJammingMode = -1;
-    int pendingDeviceJammingSwitchStatus = 0;
     int reconnectIntervalMs = 1000;
     QDateTime lastConnectAttemptAt;
     QDateTime lastConnectedAt;
@@ -170,19 +177,6 @@ private:
     QDateTime lastReceivedAt;
     QTcpSocket::SocketError lastSocketError = QAbstractSocket::UnknownSocketError;
     QString lastSocketErrorText;
-    bool pendingDroneDirectionFindingEnabled = false;
-    quint32 pendingDroneDirectionFindingTargetId = 0;
-    bool activeDroneDirectionFindingEnabled = false;
-    quint32 activeDroneDirectionFindingTargetId = 0;
-    bool pendingDronePrecisionStrikeEnabled = false;
-    quint32 pendingDronePrecisionStrikeTimestamp = 0;
-    QString pendingDronePrecisionStrikeSn;
-    int pendingDronePrecisionStrikeType = 0;
-    quint32 pendingDronePrecisionStrikeTargetId = 0;
-    bool pendingDroneWideBandJammingEnabled = false;
-    quint32 pendingDroneWideBandJammingFrequencyKhz = 0;
-    QString pendingDroneWideBandJammingSn;
-    quint32 pendingDroneWideBandJammingTargetId = 0;
 
     void parseBuffer();
     void dispatchProtocol(const ProtocolHeader *header, const QByteArray &frameData);
@@ -196,54 +190,17 @@ private:
     bool dispatchSignalSourceParamsProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchDataCollectionProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchFirmwareProtocol(const ProtocolHeader *header, const QByteArray &frameData);
+    bool dispatchModelLibraryProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchDeviceOpsProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchGpsProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchDetectBandProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchModeSelectProtocol(const ProtocolHeader *header, const QByteArray &frameData);
     bool dispatchNetworkConfigProtocol(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleCompassCalibrationResponse(uint16_t responseDataType, const QByteArray &frameData);
     void handleDeviceInfo(const ProtocolHeader *header, const QByteArray &frameData);
     void handleDeviceStatusInfo(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleFirmwareVersionQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleGpsSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleGpsQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDetectBandSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDetectBandQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDroneReportModeSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDroneReportModeQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleSuppressionModeSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleSuppressionModeQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleO4ServerModeSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleO4ServerModeQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleUavCategoryDisplayModeSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleUavCategoryDisplayModeQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDataEnableSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDataEnableQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleFeatureModesSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleFeatureModesQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleFullScanSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleFullScanQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDeviceIpSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDeviceIpQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleTcpServerIpSettingResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleTcpServerIpQueryResponse(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleSpectrogramSwitchResponse(uint16_t responseDataType, const QByteArray &frameData);
-    void handleSpectrumDataReport(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleFullSpectrumSwitchResponse(bool enabled, const QByteArray &frameData);
-    void handleFullSpectrumReport(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleStrikeFrequencySetResponse(const QByteArray &frameData);
-    void handleStrikeFrequencyQueryResponse(const QByteArray &frameData);
-    void handlePowerAmplifierSetResponse(const QByteArray &frameData);
-    void handlePowerAmplifierQueryResponse(const QByteArray &frameData);
-    void handleDirectionCalibrationSetResponse(const QByteArray &frameData);
-    void handleDirectionCalibrationQueryResponse(const QByteArray &frameData);
-    void handleSignalSourceParamsSetResponse(const QByteArray &frameData);
-    void handleSignalSourceParamsQueryResponse(const QByteArray &frameData);
-    void handlePatternUploadResponse(const QByteArray &frameData);
     void handleDroneTargetReport(const ProtocolHeader *header, const QByteArray &frameData);
     void handleDroneDirectionFindingResponse(const QByteArray &frameData);
     void handleDroneDirectionPowerReport(const ProtocolHeader *header, const QByteArray &frameData);
-    void handleDronePrecisionStrikeResponse(const QByteArray &frameData);
     void rememberSentFrame(uint16_t dataType, int frameLength);
     void rememberReceivedFrame(uint16_t dataType, int frameLength);
     QString socketStateText() const;

@@ -6,8 +6,10 @@
 #include <QObject>
 
 class HomePage;
+class HomeCoordinator;
 class LocalTimeServiceClient;
 class SettingsPage;
+class SettingsCoordinator;
 class TcpManager;
 class QJsonObject;
 
@@ -34,14 +36,13 @@ class AppController : public QObject
     void onTcpDisconnected();
     void onTcpError(const QString &errorStr);
     void onDeviceInfoReceived(const QJsonObject &deviceInfo);
-    void onDroneTargetReported(const QJsonObject &targetInfo);
 
   private:
     void setupConnections();
     void updateDeviceStatus(DeviceConnectionState state, const QString &errorMessage = QString());
 
-    HomePage *homePage;
-    SettingsPage *settingsPage;
+    HomeCoordinator *homeCoordinator;
+    SettingsCoordinator *settingsCoordinator;
     LocalTimeServiceClient *localTimeServiceClient;
     TcpManager *tcpManager;
     ConnectionConfig connectionConfigValue;

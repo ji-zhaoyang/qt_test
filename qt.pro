@@ -20,29 +20,26 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
         src/app_controller.cpp \
+        src/coordinators/home_coordinator.cpp \
+        src/coordinators/settings_coordinator.cpp \
         src/main.cpp \
         src/mainwindow.cpp \
         src/network/core/tcp_manager.cpp \
-        src/network/device_ops/tcp_manager_angle_calibration.cpp \
-        src/network/device_base/tcp_manager_device_base.cpp \
-        src/network/settings/tcp_manager_detect_band.cpp \
-        src/network/settings/tcp_manager_data_collection.cpp \
-        src/network/settings/tcp_manager_direction_calibration_value.cpp \
-        src/network/device_ops/tcp_manager_device_ops.cpp \
-        src/network/firmware/tcp_manager_firmware.cpp \
-        src/network/settings/tcp_manager_gps.cpp \
-        src/network/settings/tcp_manager_mode_select.cpp \
-        src/network/settings/tcp_manager_network_config.cpp \
-        src/network/settings/tcp_manager_power_amplifier.cpp \
-        src/network/settings/tcp_manager_signal_source_params.cpp \
-        src/network/settings/tcp_manager_strike_frequency.cpp \
-        src/network/settings/tcp_manager_spectrum_switch.cpp \
-        src/network/device_ops/tcp_manager_system.cpp \
+        src/network/dispatch/tcp_manager_base_reports.cpp \
+        src/network/dispatch/tcp_manager_device_delegates.cpp \
+        src/network/dispatch/tcp_manager_settings_delegates.cpp \
+        src/network/dispatch/tcp_manager_spectrum_delegates.cpp \
         src/components/screen_flash_overlay.cpp \
         src/components/top_nav_bar.cpp \
+        src/services/calibration_service.cpp \
+        src/services/drone_ops_service.cpp \
+        src/services/device_ops_service.cpp \
+        src/services/spectrum_service.cpp \
+        src/services/settings_protocol_service.cpp \
         src/services/local_time_service_client.cpp \
         src/views/history/history_page.cpp \
         src/views/home/home_page.cpp \
+        src/views/home/home_web_bridge.cpp \
         src/views/home/bottom_console.cpp \
         src/views/statistics/stats_page.cpp \
         src/views/settings/alarm_history/alarm_history_page.cpp \
@@ -70,15 +67,23 @@ SOURCES += \
 HEADERS += \
         src/app_config.h \
         src/app_controller.h \
+        src/coordinators/home_coordinator.h \
+        src/coordinators/settings_coordinator.h \
         src/device_status.h \
         src/mainwindow.h \
         src/network/core/protocol_types.h \
         src/network/core/tcp_manager.h \
         src/components/screen_flash_overlay.h \
         src/components/top_nav_bar.h \
+        src/services/calibration_service.h \
+        src/services/drone_ops_service.h \
+        src/services/device_ops_service.h \
+        src/services/spectrum_service.h \
+        src/services/settings_protocol_service.h \
         src/services/local_time_service_client.h \
         src/views/history/history_page.h \
         src/views/home/home_page.h \
+        src/views/home/home_web_bridge.h \
         src/views/home/bottom_console.h \
         src/views/statistics/stats_page.h \
         src/views/settings/alarm_history/alarm_history_page.h \
@@ -106,12 +111,10 @@ HEADERS += \
 
 INCLUDEPATH += \
         $$PWD/src \
+        $$PWD/src/coordinators \
         $$PWD/src/components \
         $$PWD/src/network/core \
-        $$PWD/src/network/device_base \
-        $$PWD/src/network/device_ops \
-        $$PWD/src/network/firmware \
-        $$PWD/src/network/settings \
+        $$PWD/src/network/dispatch \
         $$PWD/src/services \
         $$PWD/src/views \
         $$PWD/src/views/home \

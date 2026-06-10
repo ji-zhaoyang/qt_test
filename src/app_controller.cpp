@@ -1,4 +1,6 @@
 #include "app_controller.h"
+#include "coordinators/home_coordinator.h"
+#include "coordinators/settings_coordinator.h"
 #include "network/core/tcp_manager.h"
 #include "services/local_time_service_client.h"
 #include "views/home/home_page.h"
@@ -13,11 +15,13 @@ AppController::AppController(HomePage *homePage, SettingsPage *settingsPage, QOb
 
 AppController::AppController(HomePage *homePage, SettingsPage *settingsPage, const ConnectionConfig &connectionConfig,
                              QObject *parent)
-    : QObject(parent), homePage(homePage), settingsPage(settingsPage),
+    : QObject(parent), homeCoordinator(nullptr), settingsCoordinator(nullptr),
       localTimeServiceClient(new LocalTimeServiceClient(this)), tcpManager(new TcpManager(this)),
       connectionConfigValue(connectionConfig)
 {
     tcpManager->setReconnectIntervalMs(connectionConfigValue.reconnectIntervalMs);
+    homeCoordinator = new HomeCoordinator(homePage, settingsPage, tcpManager, this);
+    settingsCoordinator = new SettingsCoordinator(settingsPage, tcpManager, localTimeServiceClient, this);
     setupConnections();
 }
 
@@ -50,176 +54,21 @@ void AppController::setupConnections()
     connect(tcpManager, &TcpManager::disconnected, this, &AppController::onTcpDisconnected);
     connect(tcpManager, &TcpManager::errorOccurred, this, &AppController::onTcpError);
     connect(tcpManager, &TcpManager::deviceInfoParsed, this, &AppController::onDeviceInfoReceived);
-    connect(tcpManager, &TcpManager::droneTargetReported, this, &AppController::onDroneTargetReported);
-    connect(tcpManager, &TcpManager::droneDirectionFindingResponse,
-            homePage, &HomePage::updateDroneDirectionFindingResponse);
-    connect(tcpManager, &TcpManager::droneDirectionPowerReported,
-            homePage, &HomePage::updateDroneDirectionPowerReport);
-    connect(tcpManager, &TcpManager::dronePrecisionStrikeResponse,
-            homePage, &HomePage::updateDronePrecisionStrikeResponse);
-    connect(tcpManager, &TcpManager::droneWideBandJammingResponse,
-            homePage, &HomePage::updateDroneWideBandJammingResponse);
-    connect(tcpManager, &TcpManager::deviceJammingModeSetResponse,
-            homePage, &HomePage::updateDeviceJammingSetResponse);
-    connect(tcpManager, &TcpManager::deviceJammingModeReported,
-            homePage, &HomePage::updateDeviceJammingReported);
-    connect(tcpManager, &TcpManager::connected, settingsPage, &SettingsPage::onDeviceConnectionRestored);
-    connect(tcpManager, &TcpManager::disconnected, settingsPage, &SettingsPage::onDeviceConnectionLost);
-
-    connect(tcpManager, &TcpManager::firmwareVersionsQueried, settingsPage, &SettingsPage::updateFirmwareVersions);
-    connect(tcpManager, &TcpManager::deviceGpsQueried, settingsPage, &SettingsPage::updateGpsInfo);
-    connect(tcpManager, &TcpManager::deviceGpsSetResponse, settingsPage, &SettingsPage::updateGpsSaveResult);
-    connect(tcpManager, &TcpManager::detectBandsSetResponse, settingsPage, &SettingsPage::updateDetectBandSaveResult);
-    connect(tcpManager, &TcpManager::detectBandsQueried, settingsPage, &SettingsPage::updateDetectBands);
-    connect(tcpManager, &TcpManager::droneReportModeSetResponse, settingsPage,
-            &SettingsPage::updateDroneReportModeSaveResult);
-    connect(tcpManager, &TcpManager::droneReportModeQueried, settingsPage, &SettingsPage::updateDroneReportMode);
-    connect(tcpManager, &TcpManager::suppressionModeSetResponse, settingsPage, &SettingsPage::updateJamModeSaveResult);
-    connect(tcpManager, &TcpManager::suppressionModeQueried, settingsPage, &SettingsPage::updateJamMode);
-    connect(tcpManager, &TcpManager::o4ServerModeSetResponse, settingsPage, &SettingsPage::updateNetworkModeSaveResult);
-    connect(tcpManager, &TcpManager::o4ServerModeQueried, settingsPage, &SettingsPage::updateNetworkMode);
-    connect(tcpManager, &TcpManager::uavCategoryDisplayModeSetResponse, settingsPage,
-            &SettingsPage::updateUavCategoryDisplayModeSaveResult);
-    connect(tcpManager, &TcpManager::uavCategoryDisplayModeQueried, settingsPage,
-            &SettingsPage::updateUavCategoryDisplayMode);
-    connect(tcpManager, &TcpManager::dataEnableSetResponse, settingsPage, &SettingsPage::updateDataEnableSaveResult);
-    connect(tcpManager, &TcpManager::dataEnableQueried, settingsPage, &SettingsPage::updateDataEnable);
-    connect(tcpManager, &TcpManager::featureModesSetResponse, settingsPage, &SettingsPage::updateFeatureModeSaveResult);
-    connect(tcpManager, &TcpManager::featureModesQueried, settingsPage, &SettingsPage::updateFeatureModes);
-    connect(tcpManager, &TcpManager::compassCalibrationResponse, settingsPage, &SettingsPage::updateCompassCalibrationResult);
-    connect(tcpManager, &TcpManager::spectrogramSwitchResponse, settingsPage, &SettingsPage::updateSpectrumSwitchResult);
-    connect(tcpManager, &TcpManager::spectrumDataReported, settingsPage, &SettingsPage::updateSpectrumReport);
-    connect(tcpManager, &TcpManager::fullSpectrumSwitchResponse, settingsPage, &SettingsPage::updateFullSpectrumSwitchResult);
-    connect(tcpManager, &TcpManager::fullSpectrumReported, settingsPage, &SettingsPage::updateFullSpectrumReport);
-    connect(tcpManager, &TcpManager::alarmHistoryQueried, settingsPage, &SettingsPage::updateAlarmHistory);
-    connect(tcpManager, &TcpManager::deviceUsageInfoQueried, settingsPage, &SettingsPage::updateDeviceUsageInfo);
-    connect(tcpManager, &TcpManager::buzzerEnabledQueried, settingsPage, &SettingsPage::updateBuzzerEnabled);
-    connect(tcpManager, &TcpManager::buzzerEnabledSetResponse, settingsPage, &SettingsPage::updateBuzzerEnabledSaveResult);
-    connect(tcpManager, &TcpManager::deviceRebootResponse, settingsPage, &SettingsPage::updateRebootResult);
-    connect(tcpManager, &TcpManager::modelLibraryModeQueried, settingsPage, &SettingsPage::updateModelLibraryMode);
-    connect(tcpManager, &TcpManager::modelLibraryModeSetResponse, settingsPage,
-            &SettingsPage::updateModelLibraryModeSaveResult);
-    connect(tcpManager, &TcpManager::modelLibraryRecordsQueried, settingsPage, &SettingsPage::updateModelLibraryRecords);
-    connect(tcpManager, &TcpManager::modelLibraryRecordSetResponse, settingsPage,
-            &SettingsPage::updateModelLibraryRecordSaveResult);
-    connect(tcpManager, &TcpManager::strikeFrequencyBandsQueried, settingsPage, &SettingsPage::updateStrikeFrequencyBands);
-    connect(tcpManager, &TcpManager::strikeFrequencyBandsSetResponse, settingsPage,
-            &SettingsPage::updateStrikeFrequencySaveResult);
-    connect(tcpManager, &TcpManager::powerAmplifierParamsQueried, settingsPage, &SettingsPage::updatePowerAmplifierParams);
-    connect(tcpManager, &TcpManager::powerAmplifierParamsSetResponse, settingsPage,
-            &SettingsPage::updatePowerAmplifierSaveResult);
-    connect(tcpManager, &TcpManager::directionCalibrationValuesQueried, settingsPage,
-            &SettingsPage::updateDirectionCalibrationValues);
-    connect(tcpManager, &TcpManager::directionCalibrationValuesSetResponse, settingsPage,
-            &SettingsPage::updateDirectionCalibrationSaveResult);
-    connect(tcpManager, &TcpManager::deviceJammingStatusQueried, settingsPage, &SettingsPage::updateStrikeStatus);
-    connect(tcpManager, &TcpManager::signalSourceParamsQueried, settingsPage, &SettingsPage::updateSignalSourceParams);
-    connect(tcpManager, &TcpManager::signalSourceParamsSetResponse, settingsPage,
-            &SettingsPage::updateSignalSourceParamsSaveResult);
-    connect(tcpManager, &TcpManager::patternUploadResponse, settingsPage, &SettingsPage::updatePatternUploadResult);
-    connect(tcpManager, &TcpManager::fullScanParamsQueried, settingsPage, &SettingsPage::updateFullScanSettings);
-    connect(tcpManager, &TcpManager::fullScanParamsSetResponse, settingsPage, &SettingsPage::updateFullScanSaveResult);
-    connect(tcpManager, &TcpManager::deviceIpQueried, settingsPage, &SettingsPage::updateDeviceIpSettings);
-    connect(tcpManager, &TcpManager::deviceIpSetResponse, settingsPage, &SettingsPage::updateDeviceIpSaveResult);
-    connect(tcpManager, &TcpManager::tcpServerIpQueried, settingsPage, &SettingsPage::updateTcpServerIpSettings);
-    connect(tcpManager, &TcpManager::tcpServerIpSetResponse, settingsPage, &SettingsPage::updateTcpServerIpSaveResult);
-    connect(settingsPage, &SettingsPage::requestSaveGps, tcpManager, &TcpManager::setDeviceGps);
-    connect(settingsPage, &SettingsPage::requestSaveDetectBands, tcpManager, &TcpManager::setDetectBands);
-    connect(settingsPage, &SettingsPage::requestSaveDroneReportMode, tcpManager, &TcpManager::setDroneReportMode);
-    connect(settingsPage, &SettingsPage::requestSaveJamMode, tcpManager, &TcpManager::setSuppressionMode);
-    connect(settingsPage, &SettingsPage::requestSaveNetworkMode, tcpManager, &TcpManager::setO4ServerMode);
-    connect(settingsPage, &SettingsPage::requestSaveUavCategoryDisplayMode, tcpManager,
-            &TcpManager::setUavCategoryDisplayMode);
-    connect(settingsPage, &SettingsPage::requestSaveDataEnable, tcpManager, &TcpManager::setDataEnable);
-    connect(settingsPage, &SettingsPage::requestSaveFeatureModes, tcpManager, &TcpManager::setFeatureModes);
-    connect(settingsPage, &SettingsPage::requestStartCompassCalibration, tcpManager, &TcpManager::startCompassCalibration);
-    connect(settingsPage, &SettingsPage::requestFinishCompassCalibration, tcpManager, &TcpManager::finishCompassCalibration);
-    connect(settingsPage, &SettingsPage::requestConfirmCompassCalibration, tcpManager,
-            &TcpManager::confirmCompassCalibration);
-    connect(settingsPage, &SettingsPage::requestCancelCompassCalibration, tcpManager, &TcpManager::cancelCompassCalibration);
-    connect(settingsPage, &SettingsPage::requestOpenSpectrogram, tcpManager, &TcpManager::openSpectrogram);
-    connect(settingsPage, &SettingsPage::requestCloseSpectrogram, tcpManager, &TcpManager::closeSpectrogram);
-    connect(settingsPage, &SettingsPage::requestOpenSpectrum, tcpManager, &TcpManager::openFullSpectrum);
-    connect(settingsPage, &SettingsPage::requestCloseSpectrum, tcpManager, &TcpManager::closeFullSpectrum);
-    connect(settingsPage, &SettingsPage::requestQueryAlarmHistory, tcpManager, &TcpManager::queryDeviceAlarmHistory);
-    connect(settingsPage, &SettingsPage::requestQueryDeviceUsageInfo, tcpManager, &TcpManager::queryDeviceUsageInfo);
-    connect(settingsPage, &SettingsPage::requestSaveBuzzerEnabled, tcpManager, &TcpManager::setBuzzerEnabled);
-    connect(settingsPage, &SettingsPage::requestSaveSystemTime, this,
-            [this](const QDateTime &dateTime, const QString &timezoneId)
-            {
-                const LocalTimeServiceResult result = localTimeServiceClient->setSystemTime(dateTime, timezoneId);
-                settingsPage->updateSystemTimeSaveResult(result.success, result.message);
-            });
-    connect(settingsPage, &SettingsPage::requestRebootDevice, tcpManager, &TcpManager::rebootDevice);
-    connect(settingsPage, &SettingsPage::requestSaveModelLibraryMode, tcpManager, &TcpManager::setModelLibraryMode);
-    connect(settingsPage, &SettingsPage::requestUpdateModelLibraryRecord, tcpManager, &TcpManager::setModelLibraryRecord);
-    connect(settingsPage, &SettingsPage::requestSaveStrikeFrequencyBands, tcpManager, &TcpManager::setStrikeFrequencyBands);
-    connect(settingsPage, &SettingsPage::requestSavePowerAmplifierParams, tcpManager, &TcpManager::setPowerAmplifierParams);
-    connect(settingsPage, &SettingsPage::requestSaveDirectionCalibrationValues, tcpManager,
-            &TcpManager::setDirectionCalibrationValues);
-    connect(settingsPage, &SettingsPage::requestSaveSignalSourceParams, tcpManager, &TcpManager::setSignalSourceParams);
-    connect(settingsPage, &SettingsPage::requestUploadPatternFile, tcpManager, &TcpManager::uploadPatternFile);
-    connect(settingsPage, &SettingsPage::requestSaveFullScan, tcpManager, &TcpManager::setFullScanParams);
-    connect(settingsPage, &SettingsPage::requestSaveDeviceIp, tcpManager, &TcpManager::setDeviceIp);
-    connect(settingsPage, &SettingsPage::requestSaveTcpServerIp, tcpManager, &TcpManager::setTcpServerIp);
-    connect(settingsPage, &SettingsPage::requestQueryGps, tcpManager, &TcpManager::queryDeviceGps);
-    connect(settingsPage, &SettingsPage::requestQueryDetectBands, tcpManager, &TcpManager::queryDetectBands);
-    connect(settingsPage, &SettingsPage::requestQueryDroneReportMode, tcpManager, &TcpManager::queryDroneReportMode);
-    connect(settingsPage, &SettingsPage::requestQueryJamMode, tcpManager, &TcpManager::querySuppressionMode);
-    connect(settingsPage, &SettingsPage::requestQueryNetworkMode, tcpManager, &TcpManager::queryO4ServerMode);
-    connect(settingsPage, &SettingsPage::requestQueryUavCategoryDisplayMode, tcpManager,
-            &TcpManager::queryUavCategoryDisplayMode);
-    connect(settingsPage, &SettingsPage::requestQueryDataEnable, tcpManager, &TcpManager::queryDataEnable);
-    connect(settingsPage, &SettingsPage::requestQueryFeatureModes, tcpManager, &TcpManager::queryFeatureModes);
-    connect(settingsPage, &SettingsPage::requestQueryFirmwareVersions, tcpManager, &TcpManager::queryFirmwareVersions);
-    connect(settingsPage, &SettingsPage::requestQueryStrikeFrequencyBands, tcpManager, &TcpManager::queryStrikeFrequencyBands);
-    connect(settingsPage, &SettingsPage::requestQueryStrikeStatus, tcpManager, &TcpManager::queryDeviceJammingMode);
-    connect(settingsPage, &SettingsPage::requestQueryPowerAmplifierParams, tcpManager, &TcpManager::queryPowerAmplifierParams);
-    connect(settingsPage, &SettingsPage::requestQueryDirectionCalibrationValues, tcpManager,
-            &TcpManager::queryDirectionCalibrationValues);
-    connect(settingsPage, &SettingsPage::requestQuerySignalSourceParams, tcpManager, &TcpManager::querySignalSourceParams);
-    connect(settingsPage, &SettingsPage::requestQueryBuzzerEnabled, tcpManager, &TcpManager::queryBuzzerEnabled);
-    connect(settingsPage, &SettingsPage::requestQueryModelLibraryMode, tcpManager, &TcpManager::queryModelLibraryMode);
-    connect(settingsPage, &SettingsPage::requestQueryModelLibraryRecords, this,
-            [this](int current, int size)
-            {
-                ModelLibraryPageQuery query;
-                query.current = current;
-                query.size = size;
-                tcpManager->queryModelLibraryRecords(query);
-            });
-    connect(settingsPage, &SettingsPage::requestQueryFullScan, tcpManager, &TcpManager::queryFullScanParams);
-    connect(settingsPage, &SettingsPage::requestQueryDeviceIp, tcpManager, &TcpManager::queryDeviceIp);
-    connect(settingsPage, &SettingsPage::requestQueryTcpServerIp, tcpManager, &TcpManager::queryTcpServerIp);
-    connect(settingsPage, &SettingsPage::warningRemoveTimeChanged, homePage, &HomePage::setWarningRemoveTimeSeconds);
-
-    connect(homePage, &HomePage::commJammingToggled, this,
-            [this](bool checked)
-            {
-                tcpManager->setDeviceJammingMode(0, checked ? 1 : 0);
-            });
-    connect(homePage, &HomePage::navJammingToggled, this,
-            [this](bool checked)
-            {
-                tcpManager->setDeviceJammingMode(1, checked ? 1 : 0);
-            });
-    connect(homePage, &HomePage::requestDroneDirectionFinding, this,
-            [this](bool enabled, quint32 targetId)
-            {
-                tcpManager->setDroneDirectionFinding(enabled, targetId);
-            });
-    connect(homePage, &HomePage::requestDronePrecisionStrike, this,
-            [this](bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId)
-            {
-                tcpManager->setDronePrecisionStrike(enabled, timestamp, sn, type, targetId);
-            });
-    connect(homePage, &HomePage::requestDroneWideBandJamming, this,
-            [this](bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId)
-            {
-                tcpManager->setDroneWideBandJamming(enabled, frequencyKhz, sn, targetId);
-            });
-
-    homePage->setWarningRemoveTimeSeconds(settingsPage->currentWarningRemoveTimeSeconds());
+    if (homeCoordinator)
+    {
+        homeCoordinator->setupConnections();
+        connect(tcpManager, &TcpManager::deviceInfoParsed,
+                homeCoordinator, &HomeCoordinator::handleDeviceInfo);
+        connect(tcpManager, &TcpManager::droneTargetReported,
+                homeCoordinator, &HomeCoordinator::handleDroneTargetReported);
+        homeCoordinator->initializeState();
+    }
+    if (settingsCoordinator)
+    {
+        settingsCoordinator->setupConnections();
+        connect(tcpManager, &TcpManager::deviceInfoParsed,
+                settingsCoordinator, &SettingsCoordinator::handleDeviceInfo);
+    }
 }
 
 void AppController::onTcpConnected()
@@ -244,28 +93,8 @@ void AppController::onDeviceInfoReceived(const QJsonObject &deviceInfo)
 {
     if (deviceInfo.value("protocolDataType").toInt() == 2)
     {
-        const QString deviceSerial = deviceInfo.value("deviceName").toString().trimmed();
-        settingsPage->updateFirmwareDeviceSerial(deviceSerial);
         emit deviceStatusInfoUpdated(deviceInfo);
     }
-
-    if (!deviceInfo.contains("longitude") || !deviceInfo.contains("latitude"))
-    {
-        return;
-    }
-
-    const double lng = deviceInfo["longitude"].toDouble();
-    const double lat = deviceInfo["latitude"].toDouble();
-    const double alt = deviceInfo["altitude"].toDouble();
-    const double yaw = deviceInfo["azimuth"].toDouble();
-    const double pitch = deviceInfo["pitch"].toDouble();
-
-    homePage->updateDeviceInfo(lng, lat, alt, yaw, pitch);
-}
-
-void AppController::onDroneTargetReported(const QJsonObject &targetInfo)
-{
-    homePage->updateDroneTargetInfo(targetInfo);
 }
 
 void AppController::updateDeviceStatus(DeviceConnectionState state, const QString &errorMessage)

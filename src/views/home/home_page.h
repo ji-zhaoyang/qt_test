@@ -7,6 +7,7 @@
 #include <QWidget>
 
 class BottomConsole;
+class HomeWebBridge;
 class QLabel;
 class QResizeEvent;
 class QWebEngineView;
@@ -42,16 +43,10 @@ class HomePage : public QWidget
     void resizeEvent(QResizeEvent *event) override;
     void showHomeToast(const QString &text);
     void updateHomeToastPosition();
-    void dispatchDeviceInfoToMap();
-    void dispatchDroneTargetToMap(const QJsonObject &targetInfo);
     void dispatchAllDroneTargetsToMap();
-    void dispatchWarningRemoveTimeToMap();
-    void dispatchDroneDirectionFindingResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg);
-    void dispatchDroneDirectionPowerReportToMap(const QJsonObject &reportData);
-    void dispatchDronePrecisionStrikeResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg);
-    void dispatchDroneWideBandJammingResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg);
 
     QWebEngineView *mapWebView;
+    HomeWebBridge *homeWebBridge;
     BottomConsole *bottomConsole;
     bool mapPageLoaded;
     bool hasPendingDeviceInfo;

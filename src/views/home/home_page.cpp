@@ -1,11 +1,10 @@
 #include "home_page.h"
 #include "bottom_console.h"
+#include "home_web_bridge.h"
 #include <QCoreApplication>
 #include <QHBoxLayout>
-#include <QJsonDocument>
 #include <QLabel>
 #include <QResizeEvent>
-#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -18,10 +17,10 @@ const int kHomeRightPanelWidth = 336;
 }
 
 HomePage::HomePage(QWidget *parent)
-    : QWidget(parent), mapWebView(nullptr), bottomConsole(nullptr), mapPageLoaded(false), hasPendingDeviceInfo(false),
-      pendingLng(0.0), pendingLat(0.0), pendingAlt(0.0), pendingYaw(0.0), pendingPitch(0.0),
-      pendingWarningRemoveTimeSeconds(20), commJammingEnabled(false), navJammingEnabled(false), toastWidget(nullptr),
-      toastLabel(nullptr), toastTimer(new QTimer(this))
+    : QWidget(parent), mapWebView(nullptr), homeWebBridge(nullptr), bottomConsole(nullptr), mapPageLoaded(false),
+      hasPendingDeviceInfo(false), pendingLng(0.0), pendingLat(0.0), pendingAlt(0.0), pendingYaw(0.0),
+      pendingPitch(0.0), pendingWarningRemoveTimeSeconds(20), commJammingEnabled(false), navJammingEnabled(false),
+      toastWidget(nullptr), toastLabel(nullptr), toastTimer(new QTimer(this))
 {
     setStyleSheet("background-color: #1e1e1e;");
     toastTimer->setSingleShot(true);
@@ -44,6 +43,7 @@ void HomePage::setupUi()
     layout->setSpacing(0);
 
     mapWebView = new QWebEngineView(this);
+    homeWebBridge = new HomeWebBridge(mapWebView, this);
 
     const QString htmlPath = QCoreApplication::applicationDirPath() + "/assets/web/test_map.html";
     mapWebView->setUrl(QUrl::fromLocalFile(htmlPath));
@@ -90,12 +90,18 @@ void HomePage::setupConnections()
                 mapPageLoaded = ok;
                 if (ok && hasPendingDeviceInfo)
                 {
-                    dispatchDeviceInfoToMap();
+                    if (homeWebBridge)
+                    {
+                        homeWebBridge->sendDeviceInfo(pendingLng, pendingLat, pendingAlt, pendingYaw, pendingPitch);
+                    }
                 }
                 if (ok)
                 {
                     dispatchAllDroneTargetsToMap();
-                    dispatchWarningRemoveTimeToMap();
+                    if (homeWebBridge)
+                    {
+                        homeWebBridge->sendWarningRemoveTimeSeconds(pendingWarningRemoveTimeSeconds);
+                    }
                 }
                 if (ok && mapWebView)
                 {
@@ -107,68 +113,9 @@ void HomePage::setupConnections()
     connect(mapWebView, &QWebEngineView::titleChanged, this,
             [this](const QString &title)
             {
-                if (title == "CMD:FULLSCREEN_ON")
+                if (homeWebBridge)
                 {
-                    bottomConsole->hide();
-                    emit fullscreenChanged(true);
-                }
-                else if (title == "CMD:FULLSCREEN_OFF")
-                {
-                    bottomConsole->show();
-                    emit fullscreenChanged(false);
-                }
-                else if (title.startsWith(QStringLiteral("CMD:DIRECTION_FINDING:")))
-                {
-                    const QStringList parts = title.split(QLatin1Char(':'));
-                    if (parts.size() >= 5)
-                    {
-                        const bool enabled = parts.at(2) == QStringLiteral("1");
-                        bool ok = false;
-                        const quint32 targetId = parts.at(3).toUInt(&ok);
-                        if (ok)
-                        {
-                            emit requestDroneDirectionFinding(enabled, targetId);
-                        }
-                    }
-                    mapWebView->page()->runJavaScript(QStringLiteral("document.title = 'Qt 离线地图';"));
-                }
-                else if (title.startsWith(QStringLiteral("CMD:PRECISION_STRIKE:")))
-                {
-                    const QStringList parts = title.split(QLatin1Char(':'));
-                    if (parts.size() >= 8)
-                    {
-                        const bool enabled = parts.at(2) == QStringLiteral("1");
-                        bool targetOk = false;
-                        bool timestampOk = false;
-                        bool typeOk = false;
-                        const quint32 targetId = parts.at(3).toUInt(&targetOk);
-                        const quint32 timestamp = parts.at(4).toUInt(&timestampOk);
-                        const int type = parts.at(5).toInt(&typeOk);
-                        const QString sn = QUrl::fromPercentEncoding(parts.at(6).toUtf8()).trimmed();
-                        if (targetOk && timestampOk && typeOk && !sn.isEmpty())
-                        {
-                            emit requestDronePrecisionStrike(enabled, timestamp, sn, type, targetId);
-                        }
-                    }
-                    mapWebView->page()->runJavaScript(QStringLiteral("document.title = 'Qt 离线地图';"));
-                }
-                else if (title.startsWith(QStringLiteral("CMD:WIDE_JAM:")))
-                {
-                    const QStringList parts = title.split(QLatin1Char(':'));
-                    if (parts.size() >= 7)
-                    {
-                        const bool enabled = parts.at(2) == QStringLiteral("1");
-                        bool targetOk = false;
-                        bool frequencyOk = false;
-                        const quint32 targetId = parts.at(3).toUInt(&targetOk);
-                        const quint32 frequencyKhz = parts.at(4).toUInt(&frequencyOk);
-                        const QString sn = QUrl::fromPercentEncoding(parts.at(5).toUtf8()).trimmed();
-                        if (targetOk && frequencyOk && frequencyKhz > 0 && !sn.isEmpty())
-                        {
-                            emit requestDroneWideBandJamming(enabled, frequencyKhz, sn, targetId);
-                        }
-                    }
-                    mapWebView->page()->runJavaScript(QStringLiteral("document.title = 'Qt 离线地图';"));
+                    homeWebBridge->handleTitleCommand(title);
                 }
             });
 
@@ -179,6 +126,28 @@ void HomePage::setupConnections()
 
     connect(bottomConsole, &BottomConsole::commJammingToggled, this, &HomePage::commJammingToggled);
     connect(bottomConsole, &BottomConsole::navJammingToggled, this, &HomePage::navJammingToggled);
+
+    connect(homeWebBridge, &HomeWebBridge::fullscreenRequested, this,
+            [this](bool enabled)
+            {
+                if (!bottomConsole)
+                {
+                    return;
+                }
+
+                if (enabled)
+                {
+                    bottomConsole->hide();
+                }
+                else
+                {
+                    bottomConsole->show();
+                }
+                emit fullscreenChanged(enabled);
+            });
+    connect(homeWebBridge, &HomeWebBridge::directionFindingRequested, this, &HomePage::requestDroneDirectionFinding);
+    connect(homeWebBridge, &HomeWebBridge::precisionStrikeRequested, this, &HomePage::requestDronePrecisionStrike);
+    connect(homeWebBridge, &HomeWebBridge::wideBandJammingRequested, this, &HomePage::requestDroneWideBandJamming);
 }
 
 void HomePage::resizeEvent(QResizeEvent *event)
@@ -238,7 +207,12 @@ void HomePage::updateDeviceInfo(double lng, double lat, double alt, double yaw, 
         return;
     }
 
-    dispatchDeviceInfoToMap();
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
+    homeWebBridge->sendDeviceInfo(pendingLng, pendingLat, pendingAlt, pendingYaw, pendingPitch);
 }
 
 void HomePage::updateDroneTargetInfo(const QJsonObject &targetInfo)
@@ -265,7 +239,12 @@ void HomePage::updateDroneTargetInfo(const QJsonObject &targetInfo)
         return;
     }
 
-    dispatchDroneTargetToMap(targetInfo);
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
+    homeWebBridge->sendDroneTarget(targetInfo);
 }
 
 void HomePage::setWarningRemoveTimeSeconds(int seconds)
@@ -276,7 +255,12 @@ void HomePage::setWarningRemoveTimeSeconds(int seconds)
         return;
     }
 
-    dispatchWarningRemoveTimeToMap();
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
+    homeWebBridge->sendWarningRemoveTimeSeconds(pendingWarningRemoveTimeSeconds);
 }
 
 void HomePage::updateDroneDirectionFindingResponse(quint32 targetId, bool enabled, bool success, const QString &msg)
@@ -285,7 +269,12 @@ void HomePage::updateDroneDirectionFindingResponse(quint32 targetId, bool enable
     {
         return;
     }
-    dispatchDroneDirectionFindingResponseToMap(targetId, enabled, success, msg);
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
+    homeWebBridge->sendDirectionFindingResponse(targetId, enabled, success, msg);
 }
 
 void HomePage::updateDroneDirectionPowerReport(const QJsonObject &reportData)
@@ -294,7 +283,12 @@ void HomePage::updateDroneDirectionPowerReport(const QJsonObject &reportData)
     {
         return;
     }
-    dispatchDroneDirectionPowerReportToMap(reportData);
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
+    homeWebBridge->sendDirectionPowerReport(reportData);
 }
 
 void HomePage::updateDronePrecisionStrikeResponse(quint32 targetId, bool enabled, bool success, const QString &msg)
@@ -303,7 +297,12 @@ void HomePage::updateDronePrecisionStrikeResponse(quint32 targetId, bool enabled
     {
         return;
     }
-    dispatchDronePrecisionStrikeResponseToMap(targetId, enabled, success, msg);
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
+    homeWebBridge->sendPrecisionStrikeResponse(targetId, enabled, success, msg);
 }
 
 void HomePage::updateDroneWideBandJammingResponse(quint32 targetId, bool enabled, bool success, const QString &msg)
@@ -312,7 +311,12 @@ void HomePage::updateDroneWideBandJammingResponse(quint32 targetId, bool enabled
     {
         return;
     }
-    dispatchDroneWideBandJammingResponseToMap(targetId, enabled, success, msg);
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
+    homeWebBridge->sendWideBandJammingResponse(targetId, enabled, success, msg);
 }
 
 void HomePage::updateDeviceJammingSetResponse(int mode, int switchStatus, bool success, const QString &msg)
@@ -384,126 +388,15 @@ void HomePage::updateDeviceJammingReported(int mode, int switchStatus)
     showHomeToast(text);
 }
 
-void HomePage::dispatchDeviceInfoToMap()
-{
-    if (!hasPendingDeviceInfo || !mapWebView)
-    {
-        return;
-    }
-
-    const QString jsCode = QString("if(typeof updateMarker === 'function') updateMarker(%1, %2, %3);")
-                               .arg(pendingLat, 0, 'f', 6)
-                               .arg(pendingLng, 0, 'f', 6)
-                               .arg(pendingAlt, 0, 'f', 2);
-    mapWebView->page()->runJavaScript(jsCode);
-
-    const QString jsDashboard = QString("if(typeof updateDashboard === 'function') updateDashboard(%1, %2);")
-                                    .arg(pendingYaw, 0, 'f', 2)
-                                    .arg(pendingPitch, 0, 'f', 2);
-    mapWebView->page()->runJavaScript(jsDashboard);
-}
-
-void HomePage::dispatchDroneTargetToMap(const QJsonObject &targetInfo)
-{
-    if (!mapWebView)
-    {
-        return;
-    }
-
-    const QString payload = QString::fromUtf8(QJsonDocument(targetInfo).toJson(QJsonDocument::Compact));
-    const QString jsCode =
-        QStringLiteral("if(typeof updateDroneTargetFromQt === 'function') updateDroneTargetFromQt(%1);").arg(payload);
-    mapWebView->page()->runJavaScript(jsCode);
-}
-
 void HomePage::dispatchAllDroneTargetsToMap()
 {
+    if (!homeWebBridge)
+    {
+        return;
+    }
+
     for (auto it = pendingDroneTargets.cbegin(); it != pendingDroneTargets.cend(); ++it)
     {
-        dispatchDroneTargetToMap(it.value());
+        homeWebBridge->sendDroneTarget(it.value());
     }
-}
-
-void HomePage::dispatchWarningRemoveTimeToMap()
-{
-    if (!mapWebView)
-    {
-        return;
-    }
-
-    const QString jsCode =
-        QStringLiteral("if(typeof setWarningClearDelayMs === 'function') setWarningClearDelayMs(%1);")
-            .arg(pendingWarningRemoveTimeSeconds * 1000);
-    mapWebView->page()->runJavaScript(jsCode);
-}
-
-void HomePage::dispatchDroneDirectionFindingResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg)
-{
-    if (!mapWebView)
-    {
-        return;
-    }
-
-    QJsonObject payload;
-    payload[QStringLiteral("targetId")] = static_cast<qint64>(targetId);
-    payload[QStringLiteral("enabled")] = enabled;
-    payload[QStringLiteral("success")] = success;
-    payload[QStringLiteral("message")] = msg;
-    const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    const QString jsCode = QStringLiteral(
-        "if(typeof updateDroneDirectionFindingResponseFromQt === 'function') updateDroneDirectionFindingResponseFromQt(%1);")
-                               .arg(json);
-    mapWebView->page()->runJavaScript(jsCode);
-}
-
-void HomePage::dispatchDroneDirectionPowerReportToMap(const QJsonObject &reportData)
-{
-    if (!mapWebView)
-    {
-        return;
-    }
-
-    const QString json = QString::fromUtf8(QJsonDocument(reportData).toJson(QJsonDocument::Compact));
-    const QString jsCode = QStringLiteral(
-        "if(typeof updateDroneDirectionPowerReportFromQt === 'function') updateDroneDirectionPowerReportFromQt(%1);")
-                               .arg(json);
-    mapWebView->page()->runJavaScript(jsCode);
-}
-
-void HomePage::dispatchDronePrecisionStrikeResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg)
-{
-    if (!mapWebView)
-    {
-        return;
-    }
-
-    QJsonObject payload;
-    payload[QStringLiteral("targetId")] = static_cast<qint64>(targetId);
-    payload[QStringLiteral("enabled")] = enabled;
-    payload[QStringLiteral("success")] = success;
-    payload[QStringLiteral("message")] = msg;
-    const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    const QString jsCode = QStringLiteral(
-        "if(typeof updateDronePrecisionStrikeResponseFromQt === 'function') updateDronePrecisionStrikeResponseFromQt(%1);")
-                               .arg(json);
-    mapWebView->page()->runJavaScript(jsCode);
-}
-
-void HomePage::dispatchDroneWideBandJammingResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg)
-{
-    if (!mapWebView)
-    {
-        return;
-    }
-
-    QJsonObject payload;
-    payload[QStringLiteral("targetId")] = static_cast<qint64>(targetId);
-    payload[QStringLiteral("enabled")] = enabled;
-    payload[QStringLiteral("success")] = success;
-    payload[QStringLiteral("message")] = msg;
-    const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    const QString jsCode = QStringLiteral(
-        "if(typeof updateDroneWideBandJammingResponseFromQt === 'function') updateDroneWideBandJammingResponseFromQt(%1);")
-                               .arg(json);
-    mapWebView->page()->runJavaScript(jsCode);
 }

@@ -1,4 +1,9 @@
 #include "tcp_manager.h"
+#include "services/calibration_service.h"
+#include "services/device_ops_service.h"
+#include "services/drone_ops_service.h"
+#include "services/spectrum_service.h"
+#include "services/settings_protocol_service.h"
 #include <QDateTime>
 #include <QDebug>
 #include <QTimer>
@@ -65,7 +70,13 @@ QString socketErrorText(QAbstractSocket::SocketError error)
 
 } // namespace
 
-TcpManager::TcpManager(QObject *parent) : QObject(parent)
+TcpManager::TcpManager(QObject *parent)
+    : QObject(parent),
+      droneOpsService(new DroneOpsService(this)),
+      deviceOpsService(new DeviceOpsService(this)),
+      calibrationService(new CalibrationService(this)),
+      spectrumService(new SpectrumService(this)),
+      settingsProtocolService(new SettingsProtocolService(this))
 {
     qRegisterMetaType<SpectrumReportData>("SpectrumReportData");
     qRegisterMetaType<FullSpectrumReportData>("FullSpectrumReportData");
@@ -93,6 +104,143 @@ TcpManager::TcpManager(QObject *parent) : QObject(parent)
     connect(tcpSocket, &QTcpSocket::readyRead, this, &TcpManager::onSocketReadyRead);
     connect(tcpSocket, static_cast<void (QTcpSocket::*)(QTcpSocket::SocketError)>(&QTcpSocket::error), this,
             &TcpManager::onSocketError);
+
+    droneOpsService->setFrameSender(
+        [this](uint16_t dataType, const QByteArray &payload)
+        {
+            sendFrame(dataType, payload);
+        });
+    connect(droneOpsService, &DroneOpsService::droneTargetReported, this, &TcpManager::droneTargetReported);
+    connect(droneOpsService, &DroneOpsService::droneDirectionFindingResponse,
+            this, &TcpManager::droneDirectionFindingResponse);
+    connect(droneOpsService, &DroneOpsService::droneDirectionPowerReported,
+            this, &TcpManager::droneDirectionPowerReported);
+    connect(droneOpsService, &DroneOpsService::dronePrecisionStrikeResponse,
+            this, &TcpManager::dronePrecisionStrikeResponse);
+    connect(droneOpsService, &DroneOpsService::droneWideBandJammingResponse,
+            this, &TcpManager::droneWideBandJammingResponse);
+
+    deviceOpsService->setFrameSender(
+        [this](uint16_t dataType, const QByteArray &payload)
+        {
+            sendFrame(dataType, payload);
+        });
+    connect(deviceOpsService, &DeviceOpsService::deviceJammingModeSetResponse,
+            this, &TcpManager::deviceJammingModeSetResponse);
+    connect(deviceOpsService, &DeviceOpsService::deviceJammingModeReported,
+            this, &TcpManager::deviceJammingModeReported);
+    connect(deviceOpsService, &DeviceOpsService::deviceJammingStatusQueried,
+            this, &TcpManager::deviceJammingStatusQueried);
+    connect(deviceOpsService, &DeviceOpsService::alarmHistoryQueried,
+            this, &TcpManager::alarmHistoryQueried);
+    connect(deviceOpsService, &DeviceOpsService::deviceUsageInfoQueried,
+            this, &TcpManager::deviceUsageInfoQueried);
+    connect(deviceOpsService, &DeviceOpsService::buzzerEnabledSetResponse,
+            this, &TcpManager::buzzerEnabledSetResponse);
+    connect(deviceOpsService, &DeviceOpsService::buzzerEnabledQueried,
+            this, &TcpManager::buzzerEnabledQueried);
+    connect(deviceOpsService, &DeviceOpsService::deviceRebootResponse,
+            this, &TcpManager::deviceRebootResponse);
+
+    calibrationService->setFrameSender(
+        [this](uint16_t dataType, const QByteArray &payload)
+        {
+            sendFrame(dataType, payload);
+        });
+    connect(calibrationService, &CalibrationService::compassCalibrationResponse,
+            this, &TcpManager::compassCalibrationResponse);
+
+    spectrumService->setFrameSender(
+        [this](uint16_t dataType, const QByteArray &payload)
+        {
+            sendFrame(dataType, payload);
+        });
+    connect(spectrumService, &SpectrumService::spectrogramSwitchResponse,
+            this, &TcpManager::spectrogramSwitchResponse);
+    connect(spectrumService, &SpectrumService::spectrumDataReported,
+            this, &TcpManager::spectrumDataReported);
+    connect(spectrumService, &SpectrumService::fullSpectrumSwitchResponse,
+            this, &TcpManager::fullSpectrumSwitchResponse);
+    connect(spectrumService, &SpectrumService::fullSpectrumReported,
+            this, &TcpManager::fullSpectrumReported);
+
+    settingsProtocolService->setFrameSender(
+        [this](uint16_t dataType, const QByteArray &payload)
+        {
+            sendFrame(dataType, payload);
+        });
+    connect(settingsProtocolService, &SettingsProtocolService::deviceGpsQueried,
+            this, &TcpManager::deviceGpsQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::deviceGpsSetResponse,
+            this, &TcpManager::deviceGpsSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::detectBandsSetResponse,
+            this, &TcpManager::detectBandsSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::detectBandsQueried,
+            this, &TcpManager::detectBandsQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::droneReportModeSetResponse,
+            this, &TcpManager::droneReportModeSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::droneReportModeQueried,
+            this, &TcpManager::droneReportModeQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::suppressionModeSetResponse,
+            this, &TcpManager::suppressionModeSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::suppressionModeQueried,
+            this, &TcpManager::suppressionModeQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::o4ServerModeSetResponse,
+            this, &TcpManager::o4ServerModeSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::o4ServerModeQueried,
+            this, &TcpManager::o4ServerModeQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::uavCategoryDisplayModeSetResponse,
+            this, &TcpManager::uavCategoryDisplayModeSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::uavCategoryDisplayModeQueried,
+            this, &TcpManager::uavCategoryDisplayModeQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::dataEnableSetResponse,
+            this, &TcpManager::dataEnableSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::dataEnableQueried,
+            this, &TcpManager::dataEnableQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::featureModesSetResponse,
+            this, &TcpManager::featureModesSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::featureModesQueried,
+            this, &TcpManager::featureModesQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::fullScanParamsSetResponse,
+            this, &TcpManager::fullScanParamsSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::fullScanParamsQueried,
+            this, &TcpManager::fullScanParamsQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::deviceIpSetResponse,
+            this, &TcpManager::deviceIpSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::deviceIpQueried,
+            this, &TcpManager::deviceIpQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::tcpServerIpSetResponse,
+            this, &TcpManager::tcpServerIpSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::tcpServerIpQueried,
+            this, &TcpManager::tcpServerIpQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::modelLibraryModeSetResponse,
+            this, &TcpManager::modelLibraryModeSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::modelLibraryModeQueried,
+            this, &TcpManager::modelLibraryModeQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::modelLibraryRecordSetResponse,
+            this, &TcpManager::modelLibraryRecordSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::modelLibraryRecordsQueried,
+            this, &TcpManager::modelLibraryRecordsQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::strikeFrequencyBandsSetResponse,
+            this, &TcpManager::strikeFrequencyBandsSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::strikeFrequencyBandsQueried,
+            this, &TcpManager::strikeFrequencyBandsQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::powerAmplifierParamsSetResponse,
+            this, &TcpManager::powerAmplifierParamsSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::powerAmplifierParamsQueried,
+            this, &TcpManager::powerAmplifierParamsQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::directionCalibrationValuesSetResponse,
+            this, &TcpManager::directionCalibrationValuesSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::directionCalibrationValuesQueried,
+            this, &TcpManager::directionCalibrationValuesQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::signalSourceParamsSetResponse,
+            this, &TcpManager::signalSourceParamsSetResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::signalSourceParamsQueried,
+            this, &TcpManager::signalSourceParamsQueried);
+    connect(settingsProtocolService, &SettingsProtocolService::patternUploadResponse,
+            this, &TcpManager::patternUploadResponse);
+    connect(settingsProtocolService, &SettingsProtocolService::firmwareVersionsQueried,
+            this, &TcpManager::firmwareVersionsQueried);
 }
 
 TcpManager::~TcpManager()
@@ -430,6 +578,7 @@ void TcpManager::dispatchProtocol(const ProtocolHeader *header, const QByteArray
         dispatchSignalSourceParamsProtocol(header, frameData) ||
         dispatchDataCollectionProtocol(header, frameData) ||
         dispatchFirmwareProtocol(header, frameData) ||
+        dispatchModelLibraryProtocol(header, frameData) ||
         dispatchDeviceOpsProtocol(header, frameData) ||
         dispatchGpsProtocol(header, frameData) || dispatchDetectBandProtocol(header, frameData) ||
         dispatchModeSelectProtocol(header, frameData) || dispatchNetworkConfigProtocol(header, frameData))
