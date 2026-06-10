@@ -4,7 +4,6 @@
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QLabel>
-#include <QDebug>
 #include <QResizeEvent>
 #include <QStringList>
 #include <QTimer>
@@ -148,21 +147,7 @@ void HomePage::setupConnections()
                         const QString sn = QUrl::fromPercentEncoding(parts.at(6).toUtf8()).trimmed();
                         if (targetOk && timestampOk && typeOk && !sn.isEmpty())
                         {
-                            qDebug() << "[PrecisionStrike] 首页收到网页点击命令:"
-                                     << "enabled =" << enabled
-                                     << ", targetId =" << targetId
-                                     << ", timestamp =" << timestamp
-                                     << ", type =" << type
-                                     << ", sn =" << sn;
                             emit requestDronePrecisionStrike(enabled, timestamp, sn, type, targetId);
-                        }
-                        else
-                        {
-                            qDebug() << "[PrecisionStrike] 首页收到网页命令，但参数无效:"
-                                     << "targetOk =" << targetOk
-                                     << ", timestampOk =" << timestampOk
-                                     << ", typeOk =" << typeOk
-                                     << ", sn =" << sn;
                         }
                     }
                     mapWebView->page()->runJavaScript(QStringLiteral("document.title = 'Qt 离线地图';"));
@@ -180,20 +165,7 @@ void HomePage::setupConnections()
                         const QString sn = QUrl::fromPercentEncoding(parts.at(5).toUtf8()).trimmed();
                         if (targetOk && frequencyOk && frequencyKhz > 0 && !sn.isEmpty())
                         {
-                            qDebug() << "[WideJam] 首页收到网页点击命令:"
-                                     << "enabled =" << enabled
-                                     << ", targetId =" << targetId
-                                     << ", frequencyKhz =" << frequencyKhz
-                                     << ", sn =" << sn;
                             emit requestDroneWideBandJamming(enabled, frequencyKhz, sn, targetId);
-                        }
-                        else
-                        {
-                            qDebug() << "[WideJam] 首页收到网页命令，但参数无效:"
-                                     << "targetOk =" << targetOk
-                                     << ", frequencyOk =" << frequencyOk
-                                     << ", frequencyKhz =" << frequencyKhz
-                                     << ", sn =" << sn;
                         }
                     }
                     mapWebView->page()->runJavaScript(QStringLiteral("document.title = 'Qt 离线地图';"));
@@ -331,11 +303,6 @@ void HomePage::updateDronePrecisionStrikeResponse(quint32 targetId, bool enabled
     {
         return;
     }
-    qDebug() << "[PrecisionStrike] 首页准备把精准打击结果转给网页:"
-             << "targetId =" << targetId
-             << ", enabled =" << enabled
-             << ", success =" << success
-             << ", msg =" << msg;
     dispatchDronePrecisionStrikeResponseToMap(targetId, enabled, success, msg);
 }
 
@@ -345,11 +312,6 @@ void HomePage::updateDroneWideBandJammingResponse(quint32 targetId, bool enabled
     {
         return;
     }
-    qDebug() << "[WideJam] 首页准备把宽频干扰结果转给网页:"
-             << "targetId =" << targetId
-             << ", enabled =" << enabled
-             << ", success =" << success
-             << ", msg =" << msg;
     dispatchDroneWideBandJammingResponseToMap(targetId, enabled, success, msg);
 }
 

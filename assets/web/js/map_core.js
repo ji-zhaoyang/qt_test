@@ -181,6 +181,19 @@ function getTargetSerialNumber(target) {
     return String(target && target.targetUniqueId || '').trim();
 }
 
+function getWideJamSn(target) {
+    var serial = getTargetSerialNumber(target);
+    if (serial) {
+        return serial;
+    }
+
+    var targetId = Number(target && target.targetId);
+    if (isFinite(targetId) && targetId >= 0) {
+        return String(targetId);
+    }
+    return '';
+}
+
 function getWideJamStateKey(target) {
     return target ? getTargetDisplayId(target) : '';
 }
@@ -416,7 +429,7 @@ document.getElementById('detail-wide-jam-btn').addEventListener('click', functio
     var targetId = Number(target && target.targetId);
     var frequencyKhz = Math.round(Number(target && target.frequencyKhz));
     var enabled = !isWideJamActive(target);
-    var sn = getTargetSerialNumber(target);
+    var sn = getWideJamSn(target);
     if (!target || !isFinite(targetId) || targetId < 0 || !isFinite(frequencyKhz) || frequencyKhz <= 0 || !sn) {
         showTargetActionHint('宽频干扰参数不完整', true);
         return;

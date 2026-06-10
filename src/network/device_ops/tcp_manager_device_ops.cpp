@@ -221,12 +221,6 @@ void TcpManager::setDronePrecisionStrike(bool enabled, quint32 timestamp, const 
     pendingDronePrecisionStrikeType = type;
     pendingDronePrecisionStrikeTargetId = targetId;
 
-    qDebug() << "[PrecisionStrike] 准备发送 DataType=109:"
-             << "targetId =" << targetId
-             << ", enabled =" << enabled
-             << ", timestamp =" << timestamp
-             << ", type =" << type
-             << ", sn =" << pendingDronePrecisionStrikeSn;
     sendFrame(109, QJsonDocument(payloadObject).toJson(QJsonDocument::Compact));
 }
 
@@ -246,11 +240,6 @@ void TcpManager::setDroneWideBandJamming(bool enabled, quint32 frequencyKhz, con
     pendingDroneWideBandJammingSn = sn.trimmed();
     pendingDroneWideBandJammingTargetId = targetId;
 
-    qDebug() << "[WideJam] 准备发送 DataType=114:"
-             << "targetId =" << targetId
-             << ", enabled =" << enabled
-             << ", frequencyKhz =" << frequencyKhz
-             << ", sn =" << pendingDroneWideBandJammingSn;
     sendFrame(114, payload);
 }
 
@@ -354,11 +343,6 @@ bool TcpManager::dispatchDeviceOpsProtocol(const ProtocolHeader *header, const Q
     {
         const QString resultMsg = parseResultMessageLocal(frameData);
         const bool success = resultMsg.contains(QStringLiteral("RESULT:SUCCESSED"), Qt::CaseInsensitive);
-        qDebug() << "[PrecisionStrike] 收到 DataType=110 应答:"
-                 << "targetId =" << pendingDronePrecisionStrikeTargetId
-                 << ", enabled =" << pendingDronePrecisionStrikeEnabled
-                 << ", success =" << success
-                 << ", msg =" << resultMsg;
         emit dronePrecisionStrikeResponse(pendingDronePrecisionStrikeTargetId,
                                           pendingDronePrecisionStrikeEnabled,
                                           success,
@@ -369,11 +353,6 @@ bool TcpManager::dispatchDeviceOpsProtocol(const ProtocolHeader *header, const Q
     {
         const QString resultMsg = parseResultMessageLocal(frameData);
         const bool success = resultMsg.contains(QStringLiteral("RESULT:SUCCESSED"), Qt::CaseInsensitive);
-        qDebug() << "[WideJam] 收到 DataType=115 应答:"
-                 << "targetId =" << pendingDroneWideBandJammingTargetId
-                 << ", enabled =" << pendingDroneWideBandJammingEnabled
-                 << ", success =" << success
-                 << ", msg =" << resultMsg;
         emit droneWideBandJammingResponse(pendingDroneWideBandJammingTargetId,
                                           pendingDroneWideBandJammingEnabled,
                                           success,
