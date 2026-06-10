@@ -42,6 +42,7 @@ class SettingsPage : public QWidget
 
   public:
     uint8_t getCurrentLocationMode() const;
+    int currentWarningRemoveTimeSeconds() const;
 
   private:
     void setupUi();
@@ -115,6 +116,7 @@ class SettingsPage : public QWidget
     void requestQueryAlarmHistory();
     void requestQueryDeviceUsageInfo();
     void requestSaveBuzzerEnabled(uint8_t enabled);
+    void warningRemoveTimeChanged(int seconds);
     void requestSaveSystemTime(const QDateTime &dateTime, const QString &timezoneId);
     void requestSetScreenFlashEnabled(bool enabled);
     void requestRebootDevice();

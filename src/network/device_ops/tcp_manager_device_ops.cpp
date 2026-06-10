@@ -11,6 +11,14 @@ namespace
 {
 constexpr int kAlarmHistoryPayloadLength = 79;
 
+void appendUInt32LELocal(QByteArray &buffer, quint32 value)
+{
+    buffer.append(static_cast<char>(value & 0xFF));
+    buffer.append(static_cast<char>((value >> 8) & 0xFF));
+    buffer.append(static_cast<char>((value >> 16) & 0xFF));
+    buffer.append(static_cast<char>((value >> 24) & 0xFF));
+}
+
 int readInt32LELocal(const char *data)
 {
     const quint32 raw = static_cast<quint32>(static_cast<unsigned char>(data[0])) |
@@ -199,12 +207,64 @@ ModelLibraryRecord parseModelLibraryRecordLocal(const QJsonObject &object)
 }
 } // namespace
 
+void TcpManager::setDronePrecisionStrike(bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId)
+{
+    QJsonObject payloadObject;
+    payloadObject.insert(QStringLiteral("timestamp"), static_cast<qint64>(timestamp));
+    payloadObject.insert(QStringLiteral("pa_switch"), enabled ? 1 : 0);
+    payloadObject.insert(QStringLiteral("sn"), sn.trimmed());
+    payloadObject.insert(QStringLiteral("type"), type);
+
+    pendingDronePrecisionStrikeEnabled = enabled;
+    pendingDronePrecisionStrikeTimestamp = timestamp;
+    pendingDronePrecisionStrikeSn = sn.trimmed();
+    pendingDronePrecisionStrikeType = type;
+    pendingDronePrecisionStrikeTargetId = targetId;
+
+    qDebug() << "[PrecisionStrike] 准备发送 DataType=109:"
+             << "targetId =" << targetId
+             << ", enabled =" << enabled
+             << ", timestamp =" << timestamp
+             << ", type =" << type
+             << ", sn =" << pendingDronePrecisionStrikeSn;
+    sendFrame(109, QJsonDocument(payloadObject).toJson(QJsonDocument::Compact));
+}
+
+void TcpManager::setDroneWideBandJamming(bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId)
+{
+    const QByteArray snBytes = sn.trimmed().toUtf8();
+
+    QByteArray payload;
+    payload.reserve(1 + static_cast<int>(sizeof(quint32)) + static_cast<int>(sizeof(quint32)) + snBytes.size());
+    payload.append(static_cast<char>(enabled ? 1 : 0));
+    appendUInt32LELocal(payload, frequencyKhz);
+    appendUInt32LELocal(payload, static_cast<quint32>(snBytes.size()));
+    payload.append(snBytes);
+
+    pendingDroneWideBandJammingEnabled = enabled;
+    pendingDroneWideBandJammingFrequencyKhz = frequencyKhz;
+    pendingDroneWideBandJammingSn = sn.trimmed();
+    pendingDroneWideBandJammingTargetId = targetId;
+
+    qDebug() << "[WideJam] 准备发送 DataType=114:"
+             << "targetId =" << targetId
+             << ", enabled =" << enabled
+             << ", frequencyKhz =" << frequencyKhz
+             << ", sn =" << pendingDroneWideBandJammingSn;
+    sendFrame(114, payload);
+}
+
 bool TcpManager::dispatchDeviceOpsProtocol(const ProtocolHeader *header, const QByteArray &frameData)
 {
     switch (header->dataType)
     {
     case 101:
+    {
+        const QString resultMsg = parseResultMessageLocal(frameData);
+        const bool success = resultMsg.contains(QStringLiteral("RESULT:SUCCESSED"));
+        emit deviceJammingModeSetResponse(pendingDeviceJammingMode, pendingDeviceJammingSwitchStatus, success, resultMsg);
         return true;
+    }
     case 103:
     {
         const int payloadLen =
@@ -243,6 +303,81 @@ bool TcpManager::dispatchDeviceOpsProtocol(const ProtocolHeader *header, const Q
         qDebug() << "[TcpManager] 打击状态查询结果:" << stateTexts.join(QStringLiteral(", "));
 
         emit deviceJammingStatusQueried(switchStates);
+        return true;
+    }
+    case 104:
+    {
+        const int payloadLen =
+            frameData.size() - static_cast<int>(sizeof(ProtocolHeader)) - static_cast<int>(sizeof(ProtocolTail));
+        if (payloadLen <= 0)
+        {
+            qDebug() << "[TcpManager] DataType=104 状态上报为空";
+            return true;
+        }
+
+        const QByteArray payload(frameData.constData() + sizeof(ProtocolHeader), payloadLen);
+        QJsonParseError parseError;
+        const QJsonDocument jsonDoc = QJsonDocument::fromJson(payload, &parseError);
+        if (parseError.error != QJsonParseError::NoError)
+        {
+            qDebug() << "[TcpManager] DataType=104 JSON 解析失败:" << parseError.errorString();
+            return true;
+        }
+
+        QJsonObject jsonObject;
+        if (jsonDoc.isObject())
+        {
+            jsonObject = jsonDoc.object();
+        }
+        else if (jsonDoc.isArray() && !jsonDoc.array().isEmpty() && jsonDoc.array().first().isObject())
+        {
+            jsonObject = jsonDoc.array().first().toObject();
+        }
+        else
+        {
+            qDebug() << "[TcpManager] DataType=104 JSON 结构不支持";
+            return true;
+        }
+
+        const int mode = readJsonIntLocal(jsonObject, {QStringLiteral("mode")}, -1);
+        const int switchStatus = readJsonIntLocal(jsonObject, {QStringLiteral("switch")}, -1);
+        if (mode < 0 || switchStatus < 0)
+        {
+            qDebug() << "[TcpManager] DataType=104 缺少 mode/switch 字段";
+            return true;
+        }
+
+        emit deviceJammingModeReported(mode, switchStatus);
+        return true;
+    }
+    case 110:
+    {
+        const QString resultMsg = parseResultMessageLocal(frameData);
+        const bool success = resultMsg.contains(QStringLiteral("RESULT:SUCCESSED"), Qt::CaseInsensitive);
+        qDebug() << "[PrecisionStrike] 收到 DataType=110 应答:"
+                 << "targetId =" << pendingDronePrecisionStrikeTargetId
+                 << ", enabled =" << pendingDronePrecisionStrikeEnabled
+                 << ", success =" << success
+                 << ", msg =" << resultMsg;
+        emit dronePrecisionStrikeResponse(pendingDronePrecisionStrikeTargetId,
+                                          pendingDronePrecisionStrikeEnabled,
+                                          success,
+                                          resultMsg);
+        return true;
+    }
+    case 115:
+    {
+        const QString resultMsg = parseResultMessageLocal(frameData);
+        const bool success = resultMsg.contains(QStringLiteral("RESULT:SUCCESSED"), Qt::CaseInsensitive);
+        qDebug() << "[WideJam] 收到 DataType=115 应答:"
+                 << "targetId =" << pendingDroneWideBandJammingTargetId
+                 << ", enabled =" << pendingDroneWideBandJammingEnabled
+                 << ", success =" << success
+                 << ", msg =" << resultMsg;
+        emit droneWideBandJammingResponse(pendingDroneWideBandJammingTargetId,
+                                          pendingDroneWideBandJammingEnabled,
+                                          success,
+                                          resultMsg);
         return true;
     }
     case 56:
@@ -486,6 +621,8 @@ void TcpManager::setDeviceJammingMode(int mode, int switchStatus)
     json["mode"] = mode;           // 0：驱离 1：迫降
     json["switch"] = switchStatus; // 0：关闭 1：开启
     QByteArray data = QJsonDocument(json).toJson(QJsonDocument::Compact);
+    pendingDeviceJammingMode = mode;
+    pendingDeviceJammingSwitchStatus = switchStatus;
     sendFrame(100, data);
 }
 

@@ -304,6 +304,7 @@ void SettingsPage::setupContentStack()
     connect(signalSourceParamsPage, &SignalSourceParamsPage::requestSaveSignalSourceParams, this,
             &SettingsPage::requestSaveSignalSourceParams);
     connect(systemFunctionPage, &SystemFunctionPage::requestSaveBuzzerEnabled, this, &SettingsPage::requestSaveBuzzerEnabled);
+    connect(systemFunctionPage, &SystemFunctionPage::warningRemoveTimeChanged, this, &SettingsPage::warningRemoveTimeChanged);
     connect(systemFunctionPage, &SystemFunctionPage::requestSaveSystemTime, this, &SettingsPage::requestSaveSystemTime);
     connect(systemFunctionPage, &SystemFunctionPage::requestQueryBuzzerEnabled, this, &SettingsPage::requestQueryBuzzerEnabled);
     connect(systemFunctionPage, &SystemFunctionPage::requestQueryScreenFlashEnabled, this,
@@ -326,6 +327,11 @@ void SettingsPage::setupContentStack()
     contentStack->addWidget(detectBandPage);
     contentStack->addWidget(modeSelectPage);
     contentStack->addWidget(firmwareVersionPage);
+}
+
+int SettingsPage::currentWarningRemoveTimeSeconds() const
+{
+    return systemFunctionPage ? systemFunctionPage->warningRemoveTimeSeconds() : 20;
 }
 
 void SettingsPage::bindSettingsViewSignals(QPushButton *logoutBtn)

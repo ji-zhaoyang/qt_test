@@ -1,5 +1,6 @@
 #include "bottom_console.h"
 #include <QHBoxLayout>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 BottomConsole::BottomConsole(QWidget *parent) : QWidget(parent)
@@ -16,8 +17,8 @@ void BottomConsole::setupUi()
     mainLayout->setSpacing(20);
 
     // --- 干扰大按钮区域（铺满底部） ---
-    QPushButton *btnCommJamming = new QPushButton(this);
-    QPushButton *btnNavJamming = new QPushButton(this);
+    btnCommJamming = new QPushButton(this);
+    btnNavJamming = new QPushButton(this);
 
     // 设置按钮水平方向自动拉伸铺满
     btnCommJamming->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -71,20 +72,47 @@ void BottomConsole::setupUi()
     connect(btnCommJamming, &QPushButton::toggled, this,
             [this](bool checked)
             {
-                lblCommStatus->setText(checked ? "已开启" : "已关闭");
-                lblCommStatus->setStyleSheet(
-                    checked ? "font-size: 12px; color: #ffcccc; background: transparent; border: none;"
-                            : "font-size: 12px; color: #aaa; background: transparent; border: none;");
+                applyCommJammingState(checked);
                 emit commJammingToggled(checked);
             });
 
     connect(btnNavJamming, &QPushButton::toggled, this,
             [this](bool checked)
             {
-                lblNavBtnStatus->setText(checked ? "已开启" : "已关闭");
-                lblNavBtnStatus->setStyleSheet(
-                    checked ? "font-size: 12px; color: #ffcccc; background: transparent; border: none;"
-                            : "font-size: 12px; color: #aaa; background: transparent; border: none;");
+                applyNavJammingState(checked);
                 emit navJammingToggled(checked);
             });
+
+    applyCommJammingState(false);
+    applyNavJammingState(false);
+}
+
+void BottomConsole::setCommJammingChecked(bool checked)
+{
+    QSignalBlocker blocker(btnCommJamming);
+    btnCommJamming->setChecked(checked);
+    applyCommJammingState(checked);
+}
+
+void BottomConsole::setNavJammingChecked(bool checked)
+{
+    QSignalBlocker blocker(btnNavJamming);
+    btnNavJamming->setChecked(checked);
+    applyNavJammingState(checked);
+}
+
+void BottomConsole::applyCommJammingState(bool checked)
+{
+    lblCommStatus->setText(checked ? "已开启" : "已关闭");
+    lblCommStatus->setStyleSheet(
+        checked ? "font-size: 12px; color: #ffcccc; background: transparent; border: none;"
+                : "font-size: 12px; color: #aaa; background: transparent; border: none;");
+}
+
+void BottomConsole::applyNavJammingState(bool checked)
+{
+    lblNavBtnStatus->setText(checked ? "已开启" : "已关闭");
+    lblNavBtnStatus->setStyleSheet(
+        checked ? "font-size: 12px; color: #ffcccc; background: transparent; border: none;"
+                : "font-size: 12px; color: #aaa; background: transparent; border: none;");
 }

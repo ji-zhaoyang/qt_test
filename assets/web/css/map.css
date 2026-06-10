@@ -1,6 +1,35 @@
-/* 让地图撑满整个屏幕，不留白边，并强制设置为深色背景 */
+/* 让地图和侧栏处于同一平面分栏布局 */
 body, html { margin: 0; padding: 0; height: 100%; background-color: #1e1e1e; }
-#map { height: 100%; width: 100%; background-color: #1e1e1e; }
+body { font-family: "Microsoft YaHei", sans-serif; overflow: hidden; }
+
+.app-layout {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+    background: #1b1d22;
+}
+
+.map-pane {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    background: #1e1e1e;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#map {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    background-color: #1e1e1e;
+}
 
 /* 【需求 1.2】左下角自定义控制按钮容器样式 */
 .custom-controls {
@@ -62,6 +91,95 @@ body, html { margin: 0; padding: 0; height: 100%; background-color: #1e1e1e; }
     font-family: sans-serif; 
 } 
 
+.direction-dialog {
+    position: absolute;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1200;
+    width: 700px;
+    max-width: calc(100% - 48px);
+    padding: 16px 18px 18px;
+    border-radius: 8px;
+    background: rgba(24, 26, 31, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
+    color: #fff;
+    box-sizing: border-box;
+}
+
+.direction-dialog__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.direction-dialog__title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.direction-dialog__close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #d5d8de;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.direction-dialog__target {
+    color: #aeb5c3;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.direction-dialog__message {
+    min-height: 18px;
+    color: #ffb462;
+    font-size: 12px;
+    margin-bottom: 8px;
+}
+
+.direction-dialog__power {
+    color: #dce2ed;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.direction-dialog__progress-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.direction-dialog__progress-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.direction-dialog__progress-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #ffb462 0%, #f89a4b 100%);
+    transition: width 0.15s ease;
+}
+
+.direction-dialog__progress-text {
+    color: #ffffff;
+    font-size: 12px;
+    min-width: 36px;
+    text-align: right;
+}
+
 .dash-item { 
     display: flex; 
     align-items: center; 
@@ -107,6 +225,326 @@ body, html { margin: 0; padding: 0; height: 100%; background-color: #1e1e1e; }
     font-weight: bold; 
     margin: 0; 
     color: #fff; 
+}
+
+.target-panel {
+    position: relative;
+    flex: 0 0 336px;
+    width: 336px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: #262930;
+    color: #fff;
+    box-sizing: border-box;
+}
+
+.app-layout--panel-hidden .target-panel {
+    display: none;
+}
+
+.app-layout--panel-hidden .map-pane {
+    border-right: none;
+}
+
+.target-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.target-panel__title {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.target-panel__subtitle {
+    margin-top: 3px;
+    color: #9ba3b4;
+    font-size: 11px;
+}
+
+.target-panel__badge {
+    min-width: 26px;
+    height: 26px;
+    line-height: 26px;
+    text-align: center;
+    border-radius: 13px;
+    background: #ff9d3d;
+    color: #181a20;
+    font-weight: 700;
+    padding: 0 7px;
+    box-sizing: border-box;
+    font-size: 12px;
+}
+
+.target-detail-card {
+    background: #2a2f39;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 14px 14px 12px;
+    min-height: 360px;
+    box-sizing: border-box;
+}
+
+.target-detail-card__empty {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8f98a8;
+    font-size: 12px;
+}
+
+.target-detail-card__top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding-bottom: 10px;
+}
+
+.target-detail-card__heading {
+    min-width: 0;
+    flex: 1;
+}
+
+.target-detail-card__name {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    line-height: 1.2;
+}
+
+.target-detail-card__direction-row {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.target-detail-card__direction-label {
+    color: #2f7cff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.target-detail-card__direction-value {
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.target-detail-card__visual {
+    width: 64px;
+    flex: 0 0 64px;
+    display: flex;
+    justify-content: center;
+    padding-top: 2px;
+}
+
+.target-detail-card__drone-image {
+    width: 48px;
+    height: auto;
+    object-fit: contain;
+}
+
+.target-detail-specs {
+    padding-top: 2px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+}
+
+.target-detail-specs__item {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 4px;
+    min-height: 26px;
+    padding: 1px 0;
+}
+
+.target-detail-specs__item--wide {
+    grid-column: 1 / -1;
+}
+
+.target-detail-specs__label {
+    color: #dbe2ef;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.target-detail-specs__value {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: left;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.target-detail-specs__value--left {
+    flex: initial;
+}
+
+.target-detail-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 14px;
+    margin-top: 12px;
+}
+
+.target-detail-card__action-btn {
+    min-width: 92px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    background: linear-gradient(180deg, #6d7077 0%, #565a60 100%);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.target-detail-card__action-btn:hover {
+    filter: brightness(1.05);
+}
+
+.target-detail-card__action-btn:disabled {
+    cursor: not-allowed;
+    background: linear-gradient(180deg, #4b4f57 0%, #3f434a 100%);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.72);
+    filter: none;
+}
+
+.target-detail-card__action-hint {
+    min-height: 18px;
+    padding-top: 8px;
+    color: #ffb462;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.target-detail-card__action-hint--error {
+    color: #ff8b8b;
+}
+
+.target-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.target-list__empty {
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 16px 10px;
+    text-align: center;
+    color: #8f98a8;
+    font-size: 12px;
+}
+
+.target-list__item {
+    background: #2a2f39;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 8px;
+    min-height: 72px;
+    box-sizing: border-box;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.target-list__item:hover {
+    border-color: rgba(255, 157, 61, 0.4);
+    box-shadow: 0 0 0 1px rgba(255, 157, 61, 0.08);
+}
+
+.target-list__item--active {
+    background: #f89a4b;
+    color: #1b1c20;
+    border-color: #ffbf84;
+}
+
+.target-list__content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.target-list__icon-box {
+    width: 50px;
+    height: 40px;
+    flex: 0 0 50px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.16);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.target-list__icon {
+    width: 42px;
+    height: auto;
+    object-fit: contain;
+}
+
+.target-list__body {
+    min-width: 0;
+    flex: 1;
+}
+
+.target-list__item--active .target-list__meta,
+.target-list__item--active .target-list__freq {
+    color: #2a2b2f;
+}
+
+.target-list__top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.target-list__name {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+    min-width: 0;
+}
+
+.target-list__freq {
+    color: #ffb462;
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.target-list__meta,
+.target-list__subline {
+    color: #a6afbf;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.target-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.target-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 4px;
 }
 
 /* ==================== 测距工具样式 ==================== */

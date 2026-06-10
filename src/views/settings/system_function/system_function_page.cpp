@@ -1,5 +1,6 @@
 #include "system_function_page.h"
 #include "services/local_time_service_client.h"
+#include <QCoreApplication>
 #include <QAbstractItemView>
 #include <QAbstractSpinBox>
 #include <QCheckBox>
@@ -23,7 +24,9 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSettings>
 #include <QStorageInfo>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QTimeZone>
 #include <QToolButton>
@@ -98,6 +101,23 @@ QString helperStatusSummary(const LocalTimeServiceResult &result)
     return QStringLiteral("服务异常：%1").arg(message.isEmpty() ? QStringLiteral("qt_time_helper 返回异常") : message);
 }
 
+QString systemFunctionConfigFilePath()
+{
+    QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    if (configDir.isEmpty())
+    {
+        configDir = QCoreApplication::applicationDirPath();
+    }
+
+    QDir dir(configDir);
+    dir.mkpath(QStringLiteral("."));
+    return dir.filePath(QStringLiteral("system_function.ini"));
+}
+
+constexpr auto kLocalParamGroup = "local_params";
+constexpr auto kWarningRemoveTimeKey = "warning_remove_time_seconds";
+constexpr int kDefaultWarningRemoveTimeSeconds = 20;
+
 QIcon createPasswordEyeIcon(bool visible)
 {
     QPixmap pixmap(18, 18);
@@ -167,6 +187,7 @@ SystemFunctionPage::SystemFunctionPage(QWidget *parent)
       currentUserRole(SettingsUserRole::None)
 {
     setupUi();
+    loadLocalParameterSettings();
     setUserRole(SettingsUserRole::None);
 }
 
@@ -337,6 +358,32 @@ void SystemFunctionPage::setupUi()
     paramButtonLayout->setContentsMargins(0, 16, 0, 0);
     paramButtonLayout->setSpacing(0);
     paramSaveButton = createPrimaryButton(paramFrame, QStringLiteral("保存"));
+    connect(paramSaveButton, &QPushButton::clicked, this,
+            [this]()
+            {
+                const int seconds = warningRemoveTimeSeconds();
+                if (!warningRemoveTimeEdit || seconds < 0)
+                {
+                    showToastResult(false, QStringLiteral("预警消除时间不能为空，且必须为不小于 0 的整数"));
+                    return;
+                }
+
+                QSettings settings(systemFunctionConfigFilePath(), QSettings::IniFormat);
+                settings.beginGroup(QString::fromLatin1(kLocalParamGroup));
+                settings.setValue(QString::fromLatin1(kWarningRemoveTimeKey), seconds);
+                settings.endGroup();
+                settings.sync();
+
+                if (settings.status() != QSettings::NoError)
+                {
+                    showToastResult(false, QStringLiteral("参数保存失败，请检查配置目录权限"));
+                    return;
+                }
+
+                warningRemoveTimeEdit->setText(QString::number(seconds));
+                emit warningRemoveTimeChanged(seconds);
+                showToastResult(true, QStringLiteral("参数保存成功"));
+            });
     paramButtonLayout->addWidget(paramSaveButton);
     paramButtonLayout->addStretch();
     paramLayout->addLayout(paramButtonLayout);
@@ -395,6 +442,38 @@ void SystemFunctionPage::setupUi()
     passwordButtonLayout->addWidget(changePasswordSaveButton);
     passwordButtonLayout->addStretch();
     passwordLayout->addLayout(passwordButtonLayout);
+}
+
+int SystemFunctionPage::warningRemoveTimeSeconds() const
+{
+    if (!warningRemoveTimeEdit)
+    {
+        return kDefaultWarningRemoveTimeSeconds;
+    }
+
+    bool ok = false;
+    const int seconds = warningRemoveTimeEdit->text().trimmed().toInt(&ok);
+    if (!ok || seconds < 0)
+    {
+        return -1;
+    }
+    return seconds;
+}
+
+void SystemFunctionPage::loadLocalParameterSettings()
+{
+    if (!warningRemoveTimeEdit)
+    {
+        return;
+    }
+
+    QSettings settings(systemFunctionConfigFilePath(), QSettings::IniFormat);
+    settings.beginGroup(QString::fromLatin1(kLocalParamGroup));
+    const int seconds =
+        settings.value(QString::fromLatin1(kWarningRemoveTimeKey), kDefaultWarningRemoveTimeSeconds).toInt();
+    settings.endGroup();
+
+    warningRemoveTimeEdit->setText(QString::number(qMax(0, seconds)));
 }
 
 void SystemFunctionPage::updateBuzzerEnabled(uint8_t enabled)

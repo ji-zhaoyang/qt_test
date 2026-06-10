@@ -50,6 +50,19 @@ void AppController::setupConnections()
     connect(tcpManager, &TcpManager::disconnected, this, &AppController::onTcpDisconnected);
     connect(tcpManager, &TcpManager::errorOccurred, this, &AppController::onTcpError);
     connect(tcpManager, &TcpManager::deviceInfoParsed, this, &AppController::onDeviceInfoReceived);
+    connect(tcpManager, &TcpManager::droneTargetReported, this, &AppController::onDroneTargetReported);
+    connect(tcpManager, &TcpManager::droneDirectionFindingResponse,
+            homePage, &HomePage::updateDroneDirectionFindingResponse);
+    connect(tcpManager, &TcpManager::droneDirectionPowerReported,
+            homePage, &HomePage::updateDroneDirectionPowerReport);
+    connect(tcpManager, &TcpManager::dronePrecisionStrikeResponse,
+            homePage, &HomePage::updateDronePrecisionStrikeResponse);
+    connect(tcpManager, &TcpManager::droneWideBandJammingResponse,
+            homePage, &HomePage::updateDroneWideBandJammingResponse);
+    connect(tcpManager, &TcpManager::deviceJammingModeSetResponse,
+            homePage, &HomePage::updateDeviceJammingSetResponse);
+    connect(tcpManager, &TcpManager::deviceJammingModeReported,
+            homePage, &HomePage::updateDeviceJammingReported);
     connect(tcpManager, &TcpManager::connected, settingsPage, &SettingsPage::onDeviceConnectionRestored);
     connect(tcpManager, &TcpManager::disconnected, settingsPage, &SettingsPage::onDeviceConnectionLost);
 
@@ -178,6 +191,7 @@ void AppController::setupConnections()
     connect(settingsPage, &SettingsPage::requestQueryFullScan, tcpManager, &TcpManager::queryFullScanParams);
     connect(settingsPage, &SettingsPage::requestQueryDeviceIp, tcpManager, &TcpManager::queryDeviceIp);
     connect(settingsPage, &SettingsPage::requestQueryTcpServerIp, tcpManager, &TcpManager::queryTcpServerIp);
+    connect(settingsPage, &SettingsPage::warningRemoveTimeChanged, homePage, &HomePage::setWarningRemoveTimeSeconds);
 
     connect(homePage, &HomePage::commJammingToggled, this,
             [this](bool checked)
@@ -189,6 +203,23 @@ void AppController::setupConnections()
             {
                 tcpManager->setDeviceJammingMode(1, checked ? 1 : 0);
             });
+    connect(homePage, &HomePage::requestDroneDirectionFinding, this,
+            [this](bool enabled, quint32 targetId)
+            {
+                tcpManager->setDroneDirectionFinding(enabled, targetId);
+            });
+    connect(homePage, &HomePage::requestDronePrecisionStrike, this,
+            [this](bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId)
+            {
+                tcpManager->setDronePrecisionStrike(enabled, timestamp, sn, type, targetId);
+            });
+    connect(homePage, &HomePage::requestDroneWideBandJamming, this,
+            [this](bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId)
+            {
+                tcpManager->setDroneWideBandJamming(enabled, frequencyKhz, sn, targetId);
+            });
+
+    homePage->setWarningRemoveTimeSeconds(settingsPage->currentWarningRemoveTimeSeconds());
 }
 
 void AppController::onTcpConnected()
@@ -230,6 +261,11 @@ void AppController::onDeviceInfoReceived(const QJsonObject &deviceInfo)
     const double pitch = deviceInfo["pitch"].toDouble();
 
     homePage->updateDeviceInfo(lng, lat, alt, yaw, pitch);
+}
+
+void AppController::onDroneTargetReported(const QJsonObject &targetInfo)
+{
+    homePage->updateDroneTargetInfo(targetInfo);
 }
 
 void AppController::updateDeviceStatus(DeviceConnectionState state, const QString &errorMessage)

@@ -1,9 +1,14 @@
 #ifndef HOME_PAGE_H
 #define HOME_PAGE_H
 
+#include <QHash>
+#include <QJsonObject>
+#include <QTimer>
 #include <QWidget>
 
 class BottomConsole;
+class QLabel;
+class QResizeEvent;
 class QWebEngineView;
 
 class HomePage : public QWidget
@@ -14,16 +19,37 @@ class HomePage : public QWidget
     explicit HomePage(QWidget *parent = nullptr);
 
     void updateDeviceInfo(double lng, double lat, double alt, double yaw, double pitch);
+    void updateDroneTargetInfo(const QJsonObject &targetInfo);
+    void updateDroneDirectionFindingResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void updateDroneDirectionPowerReport(const QJsonObject &reportData);
+    void updateDronePrecisionStrikeResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void updateDroneWideBandJammingResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void updateDeviceJammingSetResponse(int mode, int switchStatus, bool success, const QString &msg);
+    void updateDeviceJammingReported(int mode, int switchStatus);
+    void setWarningRemoveTimeSeconds(int seconds);
 
   signals:
     void fullscreenChanged(bool isFullscreen);
     void commJammingToggled(bool checked);
     void navJammingToggled(bool checked);
+    void requestDroneDirectionFinding(bool enabled, quint32 targetId);
+    void requestDronePrecisionStrike(bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId);
+    void requestDroneWideBandJamming(bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId);
 
   private:
     void setupUi();
     void setupConnections();
+    void resizeEvent(QResizeEvent *event) override;
+    void showHomeToast(const QString &text);
+    void updateHomeToastPosition();
     void dispatchDeviceInfoToMap();
+    void dispatchDroneTargetToMap(const QJsonObject &targetInfo);
+    void dispatchAllDroneTargetsToMap();
+    void dispatchWarningRemoveTimeToMap();
+    void dispatchDroneDirectionFindingResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void dispatchDroneDirectionPowerReportToMap(const QJsonObject &reportData);
+    void dispatchDronePrecisionStrikeResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void dispatchDroneWideBandJammingResponseToMap(quint32 targetId, bool enabled, bool success, const QString &msg);
 
     QWebEngineView *mapWebView;
     BottomConsole *bottomConsole;
@@ -34,6 +60,13 @@ class HomePage : public QWidget
     double pendingAlt;
     double pendingYaw;
     double pendingPitch;
+    int pendingWarningRemoveTimeSeconds;
+    bool commJammingEnabled;
+    bool navJammingEnabled;
+    QWidget *toastWidget;
+    QLabel *toastLabel;
+    QTimer *toastTimer;
+    QHash<QString, QJsonObject> pendingDroneTargets;
 };
 
 #endif // HOME_PAGE_H

@@ -10,6 +10,8 @@ class BottomConsole : public QWidget
     Q_OBJECT
   public:
     explicit BottomConsole(QWidget *parent = nullptr);
+    void setCommJammingChecked(bool checked);
+    void setNavJammingChecked(bool checked);
 
   signals:
     // 发出硬件控制指令信号
@@ -18,7 +20,11 @@ class BottomConsole : public QWidget
 
   private:
     void setupUi();
+    void applyCommJammingState(bool checked);
+    void applyNavJammingState(bool checked);
 
+    QPushButton *btnCommJamming;
+    QPushButton *btnNavJamming;
     QLabel *lblCommStatus;
     QLabel *lblNavBtnStatus;
 };

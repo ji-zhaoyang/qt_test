@@ -30,6 +30,7 @@ class SystemFunctionPage : public QWidget
   public:
     explicit SystemFunctionPage(QWidget *parent = nullptr);
     void setUserRole(SettingsUserRole role);
+    int warningRemoveTimeSeconds() const;
 
   signals:
     void requestSaveBuzzerEnabled(uint8_t enabled);
@@ -39,6 +40,7 @@ class SystemFunctionPage : public QWidget
     void requestSetScreenFlashEnabled(bool enabled);
     void requestRebootDevice();
     void requestChangePassword(SettingsUserRole role, const QString &oldPassword, const QString &newPassword);
+    void warningRemoveTimeChanged(int seconds);
 
   public slots:
     void updateBuzzerEnabled(uint8_t enabled);
@@ -82,6 +84,7 @@ class SystemFunctionPage : public QWidget
     void hideTimePickerPopup();
     void updateLocalSystemTimeDisplay();
     void updateHelperStatusDisplay();
+    void loadLocalParameterSettings();
     void updateToastPosition();
     void showToastResult(bool success, const QString &message);
     void handlePasswordSave();

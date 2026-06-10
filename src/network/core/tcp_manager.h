@@ -76,6 +76,9 @@ public:
     void queryDeviceIp();
     void setTcpServerIp(const QString &ip, int port);
     void queryTcpServerIp();
+    void setDroneDirectionFinding(bool enabled, quint32 targetId);       // DataType 111
+    void setDronePrecisionStrike(bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId); // DataType 109
+    void setDroneWideBandJamming(bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId); // DataType 114
 
 signals:
     // 自定义信号，抛出给 MainWindow 调度
@@ -127,10 +130,17 @@ signals:
     void modelLibraryModeQueried(uint8_t mode);
     void modelLibraryRecordSetResponse(bool success, const QString &msg);
     void modelLibraryRecordsQueried(const ModelLibraryPageResult &result);
+    void deviceJammingModeSetResponse(int mode, int switchStatus, bool success, const QString &msg);
+    void deviceJammingModeReported(int mode, int switchStatus);
     void deviceJammingStatusQueried(const QVector<int> &switchStates);
     void signalSourceParamsSetResponse(bool success, const QString &msg);
     void signalSourceParamsQueried(const SignalSourceParamsConfig &config);
     void patternUploadResponse(bool success, const QString &msg);
+    void droneTargetReported(const QJsonObject &targetInfo);
+    void droneDirectionFindingResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void droneDirectionPowerReported(const QJsonObject &reportData);
+    void dronePrecisionStrikeResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void droneWideBandJammingResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
 
 private slots:
     void onSocketConnected();
@@ -150,6 +160,8 @@ private:
     int lastSentFrameLength = 0;
     int lastReceivedFrameLength = 0;
     bool pendingFullSpectrumEnabled = false;
+    int pendingDeviceJammingMode = -1;
+    int pendingDeviceJammingSwitchStatus = 0;
     int reconnectIntervalMs = 1000;
     QDateTime lastConnectAttemptAt;
     QDateTime lastConnectedAt;
@@ -158,6 +170,19 @@ private:
     QDateTime lastReceivedAt;
     QTcpSocket::SocketError lastSocketError = QAbstractSocket::UnknownSocketError;
     QString lastSocketErrorText;
+    bool pendingDroneDirectionFindingEnabled = false;
+    quint32 pendingDroneDirectionFindingTargetId = 0;
+    bool activeDroneDirectionFindingEnabled = false;
+    quint32 activeDroneDirectionFindingTargetId = 0;
+    bool pendingDronePrecisionStrikeEnabled = false;
+    quint32 pendingDronePrecisionStrikeTimestamp = 0;
+    QString pendingDronePrecisionStrikeSn;
+    int pendingDronePrecisionStrikeType = 0;
+    quint32 pendingDronePrecisionStrikeTargetId = 0;
+    bool pendingDroneWideBandJammingEnabled = false;
+    quint32 pendingDroneWideBandJammingFrequencyKhz = 0;
+    QString pendingDroneWideBandJammingSn;
+    quint32 pendingDroneWideBandJammingTargetId = 0;
 
     void parseBuffer();
     void dispatchProtocol(const ProtocolHeader *header, const QByteArray &frameData);
@@ -215,6 +240,10 @@ private:
     void handleSignalSourceParamsSetResponse(const QByteArray &frameData);
     void handleSignalSourceParamsQueryResponse(const QByteArray &frameData);
     void handlePatternUploadResponse(const QByteArray &frameData);
+    void handleDroneTargetReport(const ProtocolHeader *header, const QByteArray &frameData);
+    void handleDroneDirectionFindingResponse(const QByteArray &frameData);
+    void handleDroneDirectionPowerReport(const ProtocolHeader *header, const QByteArray &frameData);
+    void handleDronePrecisionStrikeResponse(const QByteArray &frameData);
     void rememberSentFrame(uint16_t dataType, int frameLength);
     void rememberReceivedFrame(uint16_t dataType, int frameLength);
     QString socketStateText() const;

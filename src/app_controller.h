@@ -34,6 +34,7 @@ class AppController : public QObject
     void onTcpDisconnected();
     void onTcpError(const QString &errorStr);
     void onDeviceInfoReceived(const QJsonObject &deviceInfo);
+    void onDroneTargetReported(const QJsonObject &targetInfo);
 
   private:
     void setupConnections();

@@ -10,41 +10,142 @@
     <script src="./leaflet.js"></script>
 </head>
 <body>
-    <!-- 这是一个给地图占位的空盒子 -->
-    <div id="map"></div>
+    <div class="app-layout">
+        <div class="map-pane">
+            <div id="map"></div>
 
-    <!-- 【需求 1.2】左下角控件 HTML 结构 -->
-    <div class="custom-controls">
-        <button class="map-btn" id="btn-zoom-in" title="放大">＋</button>
-        <button class="map-btn" id="btn-zoom-out" title="缩小">－</button>
-        <button class="map-btn" id="btn-fullscreen" title="全屏/退出全屏">⛶</button>
-        <button class="map-btn" id="btn-locate" title="定位到当前目标">◎</button>
-        <button class="map-btn" id="btn-toggle-map" title="切换卫星实景图">🗺️</button>
-        <button class="map-btn" id="btn-measure" title="距离测量 (开启/关闭)">📏</button>
-    </div>
-
-    <!-- 【需求 1.6】右下角云台姿态仪表盘 -->
-    <div class="dashboard-container">
-        <div class="dash-item">
-            <div class="dash-img-box">
-                <!-- 请确保图片已拷贝到相应目录 -->
-                <img class="dash-bg" src="./images/base-1.png" alt="俯仰角底盘" onerror="this.style.display='none'">
-                <!-- 注意：在 CSS 初始化时也带上偏移量 -->
-                <img class="dash-needle" id="needle-pitch" style="transform: rotate(-226deg)" src="./images/needle.png" alt="指针" onerror="this.style.backgroundColor='red'; this.style.borderRadius='50%'">
+            <div class="custom-controls">
+                <button class="map-btn" id="btn-zoom-in" title="放大">＋</button>
+                <button class="map-btn" id="btn-zoom-out" title="缩小">－</button>
+                <button class="map-btn" id="btn-fullscreen" title="全屏/退出全屏">⛶</button>
+                <button class="map-btn" id="btn-locate" title="定位到当前目标">◎</button>
+                <button class="map-btn" id="btn-toggle-map" title="切换卫星实景图">🗺️</button>
+                <button class="map-btn" id="btn-measure" title="距离测量 (开启/关闭)">📏</button>
             </div>
-            <div class="dash-info">
-                <p class="dash-label">俯仰角</p>
-                <p class="dash-angle" id="val-pitch">-91°</p>
+
+            <div class="dashboard-container">
+                <div class="dash-item">
+                    <div class="dash-img-box">
+                        <img class="dash-bg" src="./images/base-1.png" alt="俯仰角底盘" onerror="this.style.display='none'">
+                        <img class="dash-needle" id="needle-pitch" style="transform: rotate(-226deg)" src="./images/needle.png" alt="指针" onerror="this.style.backgroundColor='red'; this.style.borderRadius='50%'">
+                    </div>
+                    <div class="dash-info">
+                        <p class="dash-label">俯仰角</p>
+                        <p class="dash-angle" id="val-pitch">-91°</p>
+                    </div>
+                </div>
+                <div class="dash-item">
+                    <div class="dash-img-box">
+                        <img class="dash-bg" src="./images/base-2.png" alt="水平角底盘" onerror="this.style.display='none'">
+                        <img class="dash-needle" id="needle-yaw" style="transform: rotate(65deg)" src="./images/needle.png" alt="指针" onerror="this.style.backgroundColor='green'; this.style.borderRadius='50%'">
+                    </div>
+                    <div class="dash-info">
+                        <p class="dash-label">水平角</p>
+                        <p class="dash-angle" id="val-yaw">110°</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="direction-dialog" id="direction-dialog" style="display:none;">
+                <div class="direction-dialog__header">
+                    <div class="direction-dialog__title">测向</div>
+                    <button class="direction-dialog__close" id="direction-dialog-close" type="button">×</button>
+                </div>
+                <div class="direction-dialog__target" id="direction-dialog-target">-</div>
+                <div class="direction-dialog__message" id="direction-dialog-message"></div>
+                <div class="direction-dialog__power">全向天线功率 <span id="direction-dialog-omni-power">-</span></div>
+                <div class="direction-dialog__power">定向天线功率 <span id="direction-dialog-directional-power">-</span></div>
+                <div class="direction-dialog__progress-row">
+                    <div class="direction-dialog__progress-bar">
+                        <div class="direction-dialog__progress-fill" id="direction-dialog-progress-fill"></div>
+                    </div>
+                    <div class="direction-dialog__progress-text" id="direction-dialog-progress-text">0%</div>
+                </div>
             </div>
         </div>
-        <div class="dash-item">
-            <div class="dash-img-box">
-                <img class="dash-bg" src="./images/base-2.png" alt="水平角底盘" onerror="this.style.display='none'">
-                <img class="dash-needle" id="needle-yaw" style="transform: rotate(65deg)" src="./images/needle.png" alt="指针" onerror="this.style.backgroundColor='green'; this.style.borderRadius='50%'">
+
+        <div class="target-panel">
+            <div class="target-panel__header">
+                <div>
+                    <div class="target-panel__title">无人机目标</div>
+                    <div class="target-panel__subtitle" id="target-summary-text">暂无目标</div>
+                </div>
+                <div class="target-panel__badge" id="target-count-badge">0</div>
             </div>
-            <div class="dash-info">
-                <p class="dash-label">水平角</p>
-                <p class="dash-angle" id="val-yaw">110°</p>
+
+            <div class="target-detail-card" id="target-detail-card">
+                <div class="target-detail-card__empty" id="target-detail-empty">等待设备上报目标</div>
+                <div class="target-detail-card__content" id="target-detail-content" style="display:none;">
+                    <div class="target-detail-card__top">
+                        <div class="target-detail-card__visual">
+                            <img class="target-detail-card__drone-image" src="./images/drone.png" alt="drone">
+                        </div>
+                        <div class="target-detail-card__heading">
+                            <div class="target-detail-card__name" id="detail-name">Unknown Signal</div>
+                            <div class="target-detail-card__direction-row">
+                                <span class="target-detail-card__direction-label">方向角：</span>
+                                <span class="target-detail-card__direction-value" id="detail-azimuth">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="target-detail-specs">
+                        <div class="target-detail-specs__item target-detail-specs__item--wide">
+                            <span class="target-detail-specs__label">序列号：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-serial">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">序号：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-target-id">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">带宽：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-bandwidth">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">中心频率：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-frequency">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">信号强度：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-signal">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">距离：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-distance">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">高度：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-altitude-sea-level">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">气压高度：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-altitude-takeoff">-</span>
+                        </div>
+                        <div class="target-detail-specs__item">
+                            <span class="target-detail-specs__label">航行速度：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-speed">-</span>
+                        </div>
+                        <div class="target-detail-specs__item target-detail-specs__item--wide">
+                            <span class="target-detail-specs__label">经纬度：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-coordinates">-</span>
+                        </div>
+                        <div class="target-detail-specs__item target-detail-specs__item--wide">
+                            <span class="target-detail-specs__label">遥控器经纬度：</span>
+                            <span class="target-detail-specs__value target-detail-specs__value--left" id="detail-controller-coordinates">-</span>
+                        </div>
+                    </div>
+                    <div class="target-detail-card__actions" id="target-detail-actions" style="display:none;">
+                        <button class="target-detail-card__action-btn" id="detail-whitelist-btn" style="display:none;">白名单</button>
+                        <button class="target-detail-card__action-btn" id="detail-wide-jam-btn" style="display:none;">宽频干扰</button>
+                        <button class="target-detail-card__action-btn" id="detail-directional-btn" style="display:none;">测向</button>
+                        <button class="target-detail-card__action-btn" id="detail-precision-strike-btn" style="display:none;">精准打击</button>
+                    </div>
+                    <div class="target-detail-card__action-hint" id="target-action-hint" style="display:none;"></div>
+                </div>
+            </div>
+
+            <div class="target-list" id="target-list">
+                <div class="target-list__empty">暂无目标列表</div>
             </div>
         </div>
     </div>
