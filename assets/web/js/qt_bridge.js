@@ -39,7 +39,7 @@ function updateDroneTargetFromQt(target) {
     }
 
     if (target.disappeared) {
-        scheduleRemoveDroneTarget(id);
+        removeDroneTarget(id);
         return;
     }
 

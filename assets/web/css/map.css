@@ -73,6 +73,11 @@ body { font-family: "Microsoft YaHei", sans-serif; overflow: hidden; }
 /* 为了配合左下角的控件，把 Leaflet 默认左上角的缩放控件隐藏掉 */
 .leaflet-control-zoom { display: none; }
 
+/* 首页不需要显示 Leaflet 右下角 attribution/附加摘要 */
+.leaflet-control-attribution {
+    display: none !important;
+}
+
 /* 【需求 1.6】右下角云台姿态仪表盘样式 */ 
 .dashboard-container { 
     position: absolute; 

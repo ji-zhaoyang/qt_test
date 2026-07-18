@@ -169,15 +169,9 @@ function ensureTargetMarker(targetId, target, positionInfo) {
         marker.setIcon(iconToUse);
     }
 
-    var estimatedText = positionInfo.estimated ? '<br>位置: 由设备位置、距离和方位角估算' : '';
-    marker.bindTooltip(
-        '无人机: ' + (target.targetName || 'Unknown Signal') +
-        '<br>ID: ' + targetId +
-        '<br>距离: ' + formatDistance(target.distance) +
-        '<br>方位角: ' + formatAngle(target.azimuth) +
-        estimatedText,
-        {direction: 'top', offset: [0, -8]}
-    );
+    if (marker.getTooltip()) {
+        marker.unbindTooltip();
+    }
 }
 
 // 放大

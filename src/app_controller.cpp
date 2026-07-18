@@ -1,26 +1,48 @@
 #include "app_controller.h"
 #include "coordinators/home_coordinator.h"
+#include "coordinators/history_coordinator.h"
 #include "coordinators/settings_coordinator.h"
+#include "database/database_manager.h"
 #include "network/core/tcp_manager.h"
+#include "repositories/history_repository.h"
 #include "services/local_time_service_client.h"
+#include "views/history/history_page.h"
 #include "views/home/home_page.h"
 #include "views/settings/settings_page.h"
 #include <QDebug>
 #include <QJsonObject>
+#include <QSqlDatabase>
+#include <QSqlError>
 
-AppController::AppController(HomePage *homePage, SettingsPage *settingsPage, QObject *parent)
-    : AppController(homePage, settingsPage, AppConfig::defaultConnectionConfig(), parent)
+AppController::AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage, QObject *parent)
+    : AppController(homePage, historyPage, settingsPage, AppConfig::defaultConnectionConfig(), parent)
 {
 }
 
-AppController::AppController(HomePage *homePage, SettingsPage *settingsPage, const ConnectionConfig &connectionConfig,
-                             QObject *parent)
-    : QObject(parent), homeCoordinator(nullptr), settingsCoordinator(nullptr),
+AppController::AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage,
+                             const ConnectionConfig &connectionConfig, QObject *parent)
+    : QObject(parent), homeCoordinator(nullptr), historyCoordinator(nullptr), settingsCoordinator(nullptr),
+      databaseManager(new DatabaseManager(this)), historyRepository(nullptr),
       localTimeServiceClient(new LocalTimeServiceClient(this)), tcpManager(new TcpManager(this)),
       connectionConfigValue(connectionConfig)
 {
     tcpManager->setReconnectIntervalMs(connectionConfigValue.reconnectIntervalMs);
+    if (databaseManager->initialize())
+    {
+        historyRepository = new HistoryRepository(databaseManager->database(), this);
+        if (!historyRepository->initialize())
+        {
+            qWarning() << "侦测历史数据库初始化失败:" << databaseManager->database().lastError().text();
+            historyRepository->deleteLater();
+            historyRepository = nullptr;
+        }
+    }
+    else
+    {
+        qWarning() << "SQLite 数据库打开失败:" << databaseManager->databasePath();
+    }
     homeCoordinator = new HomeCoordinator(homePage, settingsPage, tcpManager, this);
+    historyCoordinator = new HistoryCoordinator(historyPage, settingsPage, tcpManager, historyRepository, this);
     settingsCoordinator = new SettingsCoordinator(settingsPage, tcpManager, localTimeServiceClient, this);
     setupConnections();
 }
@@ -68,6 +90,11 @@ void AppController::setupConnections()
         settingsCoordinator->setupConnections();
         connect(tcpManager, &TcpManager::deviceInfoParsed,
                 settingsCoordinator, &SettingsCoordinator::handleDeviceInfo);
+    }
+    if (historyCoordinator)
+    {
+        historyCoordinator->setupConnections();
+        historyCoordinator->initializeState();
     }
 }
 

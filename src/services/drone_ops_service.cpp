@@ -249,7 +249,6 @@ void DroneOpsService::handleDroneTargetReport(const ProtocolHeader *header, cons
     json[QStringLiteral("returnLatitude")] = returnLatitude;
     json[QStringLiteral("droneType")] = static_cast<int>(droneType);
     json[QStringLiteral("droneNumber")] = static_cast<int>(droneNumber);
-
     emit droneTargetReported(json);
 }
 

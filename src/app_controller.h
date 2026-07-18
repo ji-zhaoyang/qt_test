@@ -7,10 +7,14 @@
 
 class HomePage;
 class HomeCoordinator;
+class HistoryCoordinator;
+class HistoryPage;
+class HistoryRepository;
 class LocalTimeServiceClient;
 class SettingsPage;
 class SettingsCoordinator;
 class TcpManager;
+class DatabaseManager;
 class QJsonObject;
 
 class AppController : public QObject
@@ -18,8 +22,8 @@ class AppController : public QObject
     Q_OBJECT
 
   public:
-    explicit AppController(HomePage *homePage, SettingsPage *settingsPage, QObject *parent = nullptr);
-    AppController(HomePage *homePage, SettingsPage *settingsPage, const ConnectionConfig &connectionConfig,
+    explicit AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage, QObject *parent = nullptr);
+    AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage, const ConnectionConfig &connectionConfig,
                   QObject *parent = nullptr);
 
     void connectToDevice();
@@ -42,7 +46,10 @@ class AppController : public QObject
     void updateDeviceStatus(DeviceConnectionState state, const QString &errorMessage = QString());
 
     HomeCoordinator *homeCoordinator;
+    HistoryCoordinator *historyCoordinator;
     SettingsCoordinator *settingsCoordinator;
+    DatabaseManager *databaseManager;
+    HistoryRepository *historyRepository;
     LocalTimeServiceClient *localTimeServiceClient;
     TcpManager *tcpManager;
     ConnectionConfig connectionConfigValue;

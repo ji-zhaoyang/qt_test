@@ -43,9 +43,6 @@ int main(int argc, char *argv[])
     // 关闭沙箱以防止在 Linux root 权限下运行 WebEngine 报错
     qputenv("QTWEBENGINE_DISABLE_SANDBOX", "1");
 
-    // 移除之前的软件渲染和禁用 GPU 的参数，恢复到最原始、最干净的状态
-    // 因为我们已经确认，只要 DISPLAY 设置正确，硬件渲染是没问题的！
-
     QApplication app(argc, argv);
 
     QFont uiFont = createGlobalUiFont();

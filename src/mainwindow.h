@@ -28,7 +28,6 @@ class MainWindow : public QMainWindow
     void resizeEvent(QResizeEvent *event) override;
 
   private:
-    void setupWindow();
     void addPages(HomePage *pageHome, HistoryPage *pageHistory, WhitelistPage *pageWhitelist, StatsPage *pageStats,
                   SettingsPage *pageSettings);
     void setupMainLayout(TopNavBar *topNavBar);

@@ -13,9 +13,8 @@
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), appController(nullptr), screenFlashOverlay(nullptr)
 {
-    setupWindow();
-
     TopNavBar *topNavBar = new TopNavBar(this);
+    //QStackedWidget 是一个卡片堆叠容器——同一时刻只显示一个子页面，其他页面隐藏但保持存活。
     stackedWidget = new QStackedWidget(this);
 
     HomePage *pageHome = new HomePage(this);
@@ -25,7 +24,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), appController(nul
     SettingsPage *pageSettings = new SettingsPage(this);
 
     addPages(pageHome, pageHistory, pageWhitelist, pageStats, pageSettings);
-    appController = new AppController(pageHome, pageSettings, AppConfig::defaultConnectionConfig(), this);
+    appController = new AppController(pageHome, pageHistory, pageSettings, AppConfig::defaultConnectionConfig(), this);
     appController->connectToDevice();
 
     setupMainLayout(topNavBar);
@@ -48,14 +47,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), appController(nul
             {
                 pageSettings->updateScreenFlashEnabled(screenFlashOverlay && screenFlashOverlay->isFlashingEnabled());
             });
-}
-
-void MainWindow::setupWindow()
-{
-    // 为了在开发板上更容易看到关闭按钮，我们暂时保留边框，如果你不需要可以取消注释下面这行
-    // setWindowFlags(Qt::FramelessWindowHint);
-    resize(800, 600);
-    setWindowTitle("军工盾 - 嵌入式 Qt 测试版");
+    showFullScreen();
 }
 
 void MainWindow::addPages(HomePage *pageHome, HistoryPage *pageHistory, WhitelistPage *pageWhitelist,

@@ -17,7 +17,7 @@ class AppConfig
     static ConnectionConfig defaultConnectionConfig()
     {
         ConnectionConfig config;
-        config.host = "10.0.76.189";
+        config.host = "10.0.7.200";
         config.port = 5555;
         config.reconnectIntervalMs = 1000;
         return config;

@@ -68,6 +68,54 @@ QString socketErrorText(QAbstractSocket::SocketError error)
     }
 }
 
+bool shouldLogStrikeFrequencyFrame(uint16_t dataType)
+{
+    return dataType == 96 || dataType == 97 || dataType == 98 || dataType == 99;
+}
+
+QString strikeFrequencyFrameLabel(uint16_t dataType)
+{
+    switch (dataType)
+    {
+    case 96:
+        return QStringLiteral("保存下发");
+    case 97:
+        return QStringLiteral("保存应答");
+    case 98:
+        return QStringLiteral("查询下发");
+    case 99:
+        return QStringLiteral("查询应答");
+    default:
+        return QStringLiteral("未知");
+    }
+}
+
+bool isCommunicationJammingCommand(uint16_t dataType, const QByteArray &payload)
+{
+    if (dataType != 100)
+    {
+        return false;
+    }
+
+    const QByteArray compactPayload = payload.trimmed();
+    return compactPayload == QByteArrayLiteral("{\"mode\":0,\"switch\":1}") ||
+           compactPayload == QByteArrayLiteral("{\"mode\":0,\"switch\":0}");
+}
+
+QString communicationJammingFrameLabel(const QByteArray &payload)
+{
+    const QByteArray compactPayload = payload.trimmed();
+    if (compactPayload == QByteArrayLiteral("{\"mode\":0,\"switch\":1}"))
+    {
+        return QStringLiteral("通信干扰打开");
+    }
+    if (compactPayload == QByteArrayLiteral("{\"mode\":0,\"switch\":0}"))
+    {
+        return QStringLiteral("通信干扰关闭");
+    }
+    return QStringLiteral("通信干扰");
+}
+
 } // namespace
 
 TcpManager::TcpManager(QObject *parent)
@@ -288,24 +336,6 @@ void TcpManager::sendCommand(const QString &cmd)
 // 发包：统一封装协议头、载荷、校验和与包尾。
 void TcpManager::sendFrame(uint16_t dataType, const QByteArray &data)
 {
-    // #region debug-point C:send-frame-entry
-    if (dataType == 18)
-    {
-        qDebug().noquote()
-            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | 进入发送 | dataType=%1 payloadSize=%2 socketState=%3 target=%4:%5")
-                   .arg(QString::number(dataType),
-                        QString::number(data.size()),
-                        socketStateText(),
-                        lastConnectedIp,
-                        QString::number(lastConnectedPort));
-        qDebug().noquote()
-            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | payloadUtf8=%1").arg(QString::fromUtf8(data));
-        qDebug().noquote()
-            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | payloadHex=%1")
-                   .arg(QString::fromLatin1(data.toHex(' ').toUpper()));
-    }
-    // #endregion
-
     if (tcpSocket->state() != QAbstractSocket::ConnectedState)
     {
         qDebug() << "[TcpManager] 未连接服务器，无法发送命令 (DataType:" << dataType << ") 当前状态:" << socketStateText()
@@ -355,19 +385,23 @@ void TcpManager::sendFrame(uint16_t dataType, const QByteArray &data)
     tcpSocket->flush();
     rememberSentFrame(dataType, frame.size());
 
-    // #region debug-point C:send-frame-written
-    if (dataType == 18)
+    if (shouldLogStrikeFrequencyFrame(dataType))
     {
         qDebug().noquote()
-            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | 已写入socket | frameSize=%1 checksum=%2 packageNum=%3")
-                   .arg(QString::number(frame.size()),
-                        QString::number(static_cast<int>(checksum)),
-                        QString::number(header.packageNum));
-        qDebug().noquote()
-            << QStringLiteral("[DEBUG-C] tcp_manager.cpp:sendFrame | frameHex=%1")
-                   .arg(QString::fromLatin1(frame.toHex(' ').toUpper()));
+            << QStringLiteral("[StrikeFrequencyFrame][TX] %1 dataType=%2 frameHex=%3")
+                   .arg(strikeFrequencyFrameLabel(dataType),
+                        QString::number(dataType),
+                        QString::fromLatin1(frame.toHex(' ').toUpper()));
     }
-    // #endregion
+
+    if (isCommunicationJammingCommand(dataType, data))
+    {
+        qDebug().noquote()
+            << QStringLiteral("[CommJammingFrame][TX] %1 dataType=%2 frameHex=%3")
+                   .arg(communicationJammingFrameLabel(data),
+                        QString::number(dataType),
+                        QString::fromLatin1(frame.toHex(' ').toUpper()));
+    }
 }
 
 bool TcpManager::isConnected() const
@@ -560,6 +594,23 @@ void TcpManager::parseBuffer()
         ProtocolHeader frameHeaderValue;
         std::memcpy(&frameHeaderValue, frameData.constData(), sizeof(frameHeaderValue));
         header = &frameHeaderValue;
+
+        if (shouldLogStrikeFrequencyFrame(header->dataType))
+        {
+            qDebug().noquote()
+                << QStringLiteral("[StrikeFrequencyFrame][RX] %1 dataType=%2 frameHex=%3")
+                       .arg(strikeFrequencyFrameLabel(header->dataType),
+                            QString::number(header->dataType),
+                            QString::fromLatin1(frameData.toHex(' ').toUpper()));
+        }
+
+        if (header->dataType == 101 && lastSentDataType == 100)
+        {
+            qDebug().noquote()
+                << QStringLiteral("[CommJammingFrame][RX] 设置应答 dataType=%1 frameHex=%2")
+                       .arg(QString::number(header->dataType),
+                            QString::fromLatin1(frameData.toHex(' ').toUpper()));
+        }
 
         // 业务分发
         dispatchProtocol(header, frameData);

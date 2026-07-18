@@ -1,6 +1,7 @@
 function setTargetPanelVisible(visible) {
     var layoutNode = document.querySelector('.app-layout');
-    if (!layoutNode) {
+    var panelNode = document.querySelector('.target-panel');
+    if (!layoutNode || !panelNode) {
         return;
     }
     layoutNode.classList.toggle('app-layout--panel-hidden', !visible);
@@ -13,10 +14,15 @@ function setTargetPanelVisible(visible) {
 }
 
 function scheduleTargetPanelHide() {
+    if (!document.querySelector('.target-panel')) {
+        return;
+    }
     if (Object.keys(droneTargets).length > 0) {
         setTargetPanelVisible(true);
         return;
     }
+    selectedTargetId = '';
+    updateTargetDetail(null);
     setTargetPanelVisible(false);
 }
 
@@ -111,6 +117,10 @@ function updatePrecisionStrikeButtonState(target) {
 }
 
 function updateTargetDetail(target) {
+    var panelNode = document.querySelector('.target-panel');
+    if (!panelNode) {
+        return;
+    }
     var emptyNode = document.getElementById('target-detail-empty');
     var contentNode = document.getElementById('target-detail-content');
     var actionsNode = document.getElementById('target-detail-actions');
@@ -168,50 +178,63 @@ function updateTargetDetail(target) {
     clearTargetActionHintIfIdle(target);
 }
 
-function renderTargetList() {
+function renderTargetList(targetIds) {
     var listNode = document.getElementById('target-list');
-    var visibleTargetIds = targetOrder.filter(function(id) {
-        return droneTargets[id];
-    });
-
-    if (!visibleTargetIds.length) {
-        listNode.innerHTML = '<div class="target-list__empty">暂无目标列表</div>';
+    if (!listNode) {
         return;
     }
 
     listNode.innerHTML = '';
-    visibleTargetIds.forEach(function(id) {
+    if (!targetIds.length) {
+        var emptyNode = document.createElement('div');
+        emptyNode.className = 'target-list__empty';
+        emptyNode.textContent = '暂无目标';
+        listNode.appendChild(emptyNode);
+        return;
+    }
+
+    targetIds.forEach(function(id) {
         var target = droneTargets[id];
-        var item = document.createElement('div');
-        item.className = 'target-list__item' + (id === selectedTargetId ? ' target-list__item--active' : '');
-        item.addEventListener('pointerdown', function(event) {
-            event.preventDefault();
-            setSelectedTarget(id, false);
+        if (!target) {
+            return;
+        }
+
+        var itemNode = document.createElement('div');
+        itemNode.className = 'target-list__item' + (id === selectedTargetId ? ' target-list__item--active' : '');
+        itemNode.addEventListener('click', function() {
+            setSelectedTarget(id, true);
         });
 
-        var bandText = getTargetActionText(target) +
-            ' · ' + formatAngle(target.azimuth) + ' · ' + formatFrequencyKhz(target.frequencyKhz);
-        var subline = 'ID: ' + id;
+        var displayName = target.targetName || 'Unknown Signal';
+        var metaText = '序号 ' + String(target.targetId || 0);
+        var sublineText = formatAngle(target.azimuth) + ' · ' + formatFrequencyKhz(target.frequencyKhz);
 
-        item.innerHTML =
+        itemNode.innerHTML =
             '<div class="target-list__content">' +
-                '<div class="target-list__icon-box">' +
-                    '<img class="target-list__icon" src="./images/drone.png" alt="drone">' +
-                '</div>' +
-                '<div class="target-list__body">' +
-                    '<div class="target-list__top">' +
-                        '<div class="target-list__name">' + escapeHtml(target.targetName || 'Unknown Signal') + '</div>' +
-                    '</div>' +
-                    '<div class="target-list__freq">' + escapeHtml(bandText) + '</div>' +
-                    '<div class="target-list__meta">' + escapeHtml(subline) + '</div>' +
-                '</div>' +
+            '  <div class="target-list__icon-box">' +
+            '    <img class="target-list__icon" src="./images/drone.png" alt="drone">' +
+            '  </div>' +
+            '  <div class="target-list__body">' +
+            '    <div class="target-list__top">' +
+            '      <div class="target-list__name">' + displayName + '</div>' +
+            '    </div>' +
+            '    <div class="target-list__meta">' + metaText + '</div>' +
+            '    <div class="target-list__subline">' + sublineText + '</div>' +
+            '  </div>' +
             '</div>';
-        listNode.appendChild(item);
+
+        listNode.appendChild(itemNode);
     });
 }
 
 function renderTargetPanel() {
-    var targetIds = Object.keys(droneTargets);
+    var panelNode = document.querySelector('.target-panel');
+    if (!panelNode) {
+        return;
+    }
+    var targetIds = targetOrder.filter(function(id) {
+        return !!droneTargets[id];
+    });
     document.getElementById('target-count-badge').textContent = String(targetIds.length);
     document.getElementById('target-summary-text').textContent =
         targetIds.length ? '实时接收设备自动上报目标' : '暂无目标';
@@ -227,5 +250,5 @@ function renderTargetPanel() {
     }
 
     updateTargetDetail(selectedTargetId ? droneTargets[selectedTargetId] : null);
-    renderTargetList();
+    renderTargetList(targetIds);
 }

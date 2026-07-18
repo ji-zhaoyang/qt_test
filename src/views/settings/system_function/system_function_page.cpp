@@ -5,10 +5,12 @@
 #include <QAbstractSpinBox>
 #include <QCheckBox>
 #include <QCalendarWidget>
+#include <QColor>
 #include <QComboBox>
 #include <QCompleter>
 #include <QDateTime>
 #include <QDateTimeEdit>
+#include <QDebug>
 #include <QEvent>
 #include <QFrame>
 #include <QGraphicsOpacityEffect>
@@ -29,6 +31,7 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include <QTimeZone>
+#include <QTextCharFormat>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -151,6 +154,33 @@ QIcon createPasswordEyeIcon(bool visible)
     }
 
     return QIcon(pixmap);
+}
+
+void applyCalendarTextColors(QCalendarWidget *calendar)
+{
+    if (!calendar)
+    {
+        return;
+    }
+
+    QPalette palette = calendar->palette();
+    palette.setColor(QPalette::WindowText, QColor(QStringLiteral("#ffffff")));
+    palette.setColor(QPalette::Text, QColor(QStringLiteral("#ffffff")));
+    palette.setColor(QPalette::ButtonText, QColor(QStringLiteral("#ffffff")));
+    palette.setColor(QPalette::HighlightedText, QColor(QStringLiteral("#ffffff")));
+    calendar->setPalette(palette);
+
+    QTextCharFormat weekdayFormat;
+    weekdayFormat.setForeground(QColor(QStringLiteral("#ffffff")));
+    for (Qt::DayOfWeek day : {Qt::Monday, Qt::Tuesday, Qt::Wednesday, Qt::Thursday, Qt::Friday})
+    {
+        calendar->setWeekdayTextFormat(day, weekdayFormat);
+    }
+
+    QTextCharFormat weekendFormat;
+    weekendFormat.setForeground(QColor(QStringLiteral("#d98c84")));
+    calendar->setWeekdayTextFormat(Qt::Saturday, weekendFormat);
+    calendar->setWeekdayTextFormat(Qt::Sunday, weekendFormat);
 }
 
 void updatePasswordFieldFont(QLineEdit *lineEdit)
@@ -381,6 +411,7 @@ void SystemFunctionPage::setupUi()
                 }
 
                 warningRemoveTimeEdit->setText(QString::number(seconds));
+                qDebug().noquote() << QStringLiteral("[WarningRemoveTime][SettingsSaved] seconds=%1").arg(seconds);
                 emit warningRemoveTimeChanged(seconds);
                 showToastResult(true, QStringLiteral("参数保存成功"));
             });
@@ -1090,9 +1121,10 @@ void SystemFunctionPage::ensureTimePickerPopup()
                                       "QCalendarWidget QWidget#qt_calendar_calendarview { background-color: #1f1f22; "
                                       "alternate-background-color: #1f1f22; }"
                                       "QCalendarWidget QTableView { background-color: #1f1f22; alternate-background-color: #1f1f22; "
-                                      "selection-background-color: #e58b3e; selection-color: #ffffff; }"
+                                      "selection-background-color: #e58b3e; selection-color: #ffffff; color: #ffffff; }"
+                                      "QCalendarWidget QAbstractItemView:enabled { color: #ffffff; selection-color: #ffffff; }"
                                       "QCalendarWidget QHeaderView { background-color: #1f1f22; }"
-                                      "QCalendarWidget QHeaderView::section { background-color: #1f1f22; color: #d98c84; "
+                                      "QCalendarWidget QHeaderView::section { background-color: #1f1f22; color: #ffffff; "
                                       "border: none; padding: 6px 0; font-size: 14px; font-weight: bold; }"
                                       "QCalendarWidget QToolButton { color: #ffffff; background: transparent; min-width: 30px; "
                                       "min-height: 28px; font-size: 14px; }"
@@ -1101,6 +1133,7 @@ void SystemFunctionPage::ensureTimePickerPopup()
                                       "QCalendarWidget QSpinBox { background-color: #101113; color: #ffffff; border: 1px solid #2d2d2d; }"
                                       "QCalendarWidget QAbstractItemView { background-color: #1f1f22; color: #ffffff; border: none; "
                                       "selection-background-color: #e58b3e; selection-color: #ffffff; }");
+    applyCalendarTextColors(timePickerCalendar);
     contentLayout->addWidget(timePickerCalendar);
 
     QFrame *calendarTimeSeparator = new QFrame(timePickerPopup);

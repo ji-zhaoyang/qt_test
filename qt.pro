@@ -1,4 +1,4 @@
-QT += core gui network websockets webenginewidgets
+QT += core gui network sql websockets webenginewidgets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -20,7 +20,9 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
         src/app_controller.cpp \
+        src/database/database_manager.cpp \
         src/coordinators/home_coordinator.cpp \
+        src/coordinators/history_coordinator.cpp \
         src/coordinators/settings_coordinator.cpp \
         src/main.cpp \
         src/mainwindow.cpp \
@@ -37,6 +39,7 @@ SOURCES += \
         src/services/spectrum_service.cpp \
         src/services/settings_protocol_service.cpp \
         src/services/local_time_service_client.cpp \
+        src/repositories/history_repository.cpp \
         src/views/history/history_page.cpp \
         src/views/home/home_page.cpp \
         src/views/home/home_web_bridge.cpp \
@@ -67,7 +70,9 @@ SOURCES += \
 HEADERS += \
         src/app_config.h \
         src/app_controller.h \
+        src/database/database_manager.h \
         src/coordinators/home_coordinator.h \
+        src/coordinators/history_coordinator.h \
         src/coordinators/settings_coordinator.h \
         src/device_status.h \
         src/mainwindow.h \
@@ -81,6 +86,7 @@ HEADERS += \
         src/services/spectrum_service.h \
         src/services/settings_protocol_service.h \
         src/services/local_time_service_client.h \
+        src/repositories/history_repository.h \
         src/views/history/history_page.h \
         src/views/home/home_page.h \
         src/views/home/home_web_bridge.h \

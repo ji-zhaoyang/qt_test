@@ -1,6 +1,7 @@
 #ifndef HOME_PAGE_H
 #define HOME_PAGE_H
 
+#include <QDateTime>
 #include <QHash>
 #include <QJsonObject>
 #include <QTimer>
@@ -43,10 +44,25 @@ class HomePage : public QWidget
     void resizeEvent(QResizeEvent *event) override;
     void showHomeToast(const QString &text);
     void updateHomeToastPosition();
+    void updateRightPanelVisibility();
+    void refreshRightPanelContent(const QJsonObject &targetInfo);
+    void refreshRightPanelContentFromPendingTargets();
+    void cleanupExpiredDroneTargets();
+    QString formatPanelFrequency(double frequencyKhz) const;
+    QString resolvePanelSerialNumber(const QJsonObject &targetInfo) const;
+    QString resolvePanelModelName(const QJsonObject &targetInfo) const;
     void dispatchAllDroneTargetsToMap();
 
     QWebEngineView *mapWebView;
     HomeWebBridge *homeWebBridge;
+    QWidget *bottomBar;
+    QWidget *rightPanel;
+    QLabel *rightPanelTitleLabel;
+    QLabel *rightPanelCountValueLabel;
+    QLabel *rightPanelModelValueLabel;
+    QLabel *rightPanelSerialValueLabel;
+    QLabel *rightPanelFrequencyValueLabel;
+    QLabel *rightPanelDistanceValueLabel;
     BottomConsole *bottomConsole;
     bool mapPageLoaded;
     bool hasPendingDeviceInfo;
@@ -61,7 +77,9 @@ class HomePage : public QWidget
     QWidget *toastWidget;
     QLabel *toastLabel;
     QTimer *toastTimer;
+    QTimer *droneTargetCleanupTimer;
     QHash<QString, QJsonObject> pendingDroneTargets;
+    QHash<QString, QDateTime> pendingDroneTargetLastSeenAt;
 };
 
 #endif // HOME_PAGE_H

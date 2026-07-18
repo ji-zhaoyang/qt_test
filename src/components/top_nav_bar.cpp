@@ -42,8 +42,10 @@ TopNavBar::TopNavBar(QWidget *parent)
       compassStatusValue(nullptr), adcStatusValue(nullptr), pa485StatusValue(nullptr), paUnderpowerStatusValue(nullptr),
       paOverpowerStatusValue(nullptr), hasDeviceStatusData(false), hasAnyAlarm(false), m_localTimer(nullptr)
 {
+    //顶栏定高
     setFixedHeight(60);
     setStyleSheet("background-color: #2b2b2e; color: white; border-bottom: 1px solid #111;");
+    //负责构建整个顶部导航栏的 UI 结构，完成从布局到信号连接的全部工作
     setupUi();
 
     // 初始化并启动本地定时器，每秒刷新一次时间
@@ -58,7 +60,9 @@ TopNavBar::TopNavBar(QWidget *parent)
 void TopNavBar::setupUi()
 {
     QHBoxLayout *layout = new QHBoxLayout(this);
+    //左右各留 20px 呼吸空间，上下无内边距
     layout->setContentsMargins(20, 0, 20, 0);
+    //相邻控件之间的间隔仅 5px
     layout->setSpacing(5);
 
     // 导航按钮样式
@@ -93,6 +97,7 @@ void TopNavBar::setupUi()
     {
         QPushButton *btn = navBtns[i];
         btn->setStyleSheet(navBtnQss);
+        //按钮高 40px，上下各留 10px
         btn->setFixedHeight(40);
         layout->addWidget(btn);
     }
