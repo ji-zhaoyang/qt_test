@@ -1,3 +1,18 @@
+function setMapAlarmFlashActive(active) {
+    var overlay = document.getElementById('map-alarm-overlay');
+    if (!overlay) {
+        return;
+    }
+
+    if (active) {
+        overlay.hidden = false;
+        overlay.classList.add('map-alarm-overlay--active');
+    } else {
+        overlay.classList.remove('map-alarm-overlay--active');
+        overlay.hidden = true;
+    }
+}
+
 function setQtCommandTitle(command) {
     document.title = command;
 }
@@ -25,6 +40,29 @@ function sendWideJamCommand(enabled, targetId, frequencyKhz, sn) {
         'CMD:WIDE_JAM:' + (enabled ? '1' : '0') + ':' +
         String(targetId) + ':' + String(frequencyKhz) + ':' +
         encodeURIComponent(String(sn || '')) + ':' + String(wideJamState.commandSequence)
+    );
+}
+
+function sendVideoTakeoverCommand(enabled, targetId, frequencyKhz) {
+    videoTakeoverState.commandSequence += 1;
+    setQtCommandTitle(
+        'CMD:VIDEO_TAKEOVER:' + (enabled ? '1' : '0') + ':' +
+        String(targetId) + ':' + String(frequencyKhz) + ':' +
+        String(videoTakeoverState.commandSequence)
+    );
+}
+
+var whitelistState = {
+    commandSequence: 0
+};
+
+function sendWhitelistAddCommand(serial, recordKey) {
+    whitelistState.commandSequence += 1;
+    setQtCommandTitle(
+        'CMD:WHITELIST_ADD:' +
+        encodeURIComponent(String(serial || '')) + ':' +
+        encodeURIComponent(String(recordKey || '')) + ':' +
+        String(whitelistState.commandSequence)
     );
 }
 
@@ -164,6 +202,37 @@ function updateDroneWideBandJammingResponseFromQt(response) {
     }
     updateTargetDetail(getSelectedDroneTarget());
     showTargetActionHint(message || '宽频干扰执行失败', true);
+}
+
+function updateDroneVideoTakeoverResponseFromQt(response) {
+    if (!response || typeof response !== 'object') {
+        return;
+    }
+
+    var targetId = Number(response.targetId);
+    var target = getTargetByNumericId(targetId) || getSelectedDroneTarget();
+    var message = String(response.message || '').trim();
+    if (response.success && target) {
+        videoTakeoverState.pendingTargetId = null;
+        videoTakeoverState.pendingEnabled = false;
+        if (response.enabled) {
+            videoTakeoverState.activeTargets[getVideoTakeoverStateKey(target)] = true;
+            updateTargetDetail(target);
+            showTargetActionHint('图传接管已开启', false);
+        } else {
+            delete videoTakeoverState.activeTargets[getVideoTakeoverStateKey(target)];
+            updateTargetDetail(target);
+            showTargetActionHint('图传接管已关闭', false);
+        }
+        return;
+    }
+
+    if (videoTakeoverState.pendingTargetId === targetId) {
+        videoTakeoverState.pendingTargetId = null;
+        videoTakeoverState.pendingEnabled = false;
+    }
+    updateTargetDetail(getSelectedDroneTarget());
+    showTargetActionHint(message || '图传接管执行失败', true);
 }
 
 function updateMarker(lat, lng, alt) {

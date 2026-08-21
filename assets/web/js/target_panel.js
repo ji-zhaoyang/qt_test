@@ -62,8 +62,10 @@ function clearTargetActionHintIfIdle(target) {
         precisionStrikeState.pendingTargetId === targetId;
     var wideJamPending = isFinite(targetId) && wideJamState.pendingTargetId !== null &&
         wideJamState.pendingTargetId === targetId;
-    var hasActiveAction = isPrecisionStrikeActive(target) || isWideJamActive(target);
-    if (!precisionPending && !wideJamPending && !hasActiveAction) {
+    var videoTakeoverPending = isFinite(targetId) && videoTakeoverState.pendingTargetId !== null &&
+        videoTakeoverState.pendingTargetId === targetId;
+    var hasActiveAction = isPrecisionStrikeActive(target) || isWideJamActive(target) || isVideoTakeoverActive(target);
+    if (!precisionPending && !wideJamPending && !videoTakeoverPending && !hasActiveAction) {
         showTargetActionHint('', false);
     }
 }
@@ -116,6 +118,30 @@ function updatePrecisionStrikeButtonState(target) {
     button.textContent = '精准打击';
 }
 
+function updateVideoTakeoverButtonState(target) {
+    var button = document.getElementById('detail-video-takeover-btn');
+    if (!button) {
+        return;
+    }
+
+    var targetId = Number(target && target.targetId);
+    if (isFinite(targetId) && videoTakeoverState.pendingTargetId !== null &&
+        videoTakeoverState.pendingTargetId === targetId) {
+        button.disabled = true;
+        button.textContent = videoTakeoverState.pendingEnabled ? '开启中...' : '关闭中...';
+        return;
+    }
+
+    if (isVideoTakeoverActive(target)) {
+        button.disabled = false;
+        button.textContent = '关闭图传接管';
+        return;
+    }
+
+    button.disabled = false;
+    button.textContent = '图传接管';
+}
+
 function updateTargetDetail(target) {
     var panelNode = document.querySelector('.target-panel');
     if (!panelNode) {
@@ -126,6 +152,7 @@ function updateTargetDetail(target) {
     var actionsNode = document.getElementById('target-detail-actions');
     var whitelistBtn = document.getElementById('detail-whitelist-btn');
     var wideJamBtn = document.getElementById('detail-wide-jam-btn');
+    var videoTakeoverBtn = document.getElementById('detail-video-takeover-btn');
     var directionalBtn = document.getElementById('detail-directional-btn');
     var precisionStrikeBtn = document.getElementById('detail-precision-strike-btn');
     if (!target) {
@@ -157,18 +184,21 @@ function updateTargetDetail(target) {
 
     var showWhitelist = isSpectrumDrone(target);
     var showWideJam = canShowWideJam(target);
+    var showVideoTakeover = canShowVideoTakeover(target);
     var showDirectional = hasDirectionalAction(target);
     var showPrecisionStrike = hasPrecisionStrike(target);
 
     whitelistBtn.style.display = showWhitelist ? 'inline-flex' : 'none';
     wideJamBtn.style.display = showWideJam ? 'inline-flex' : 'none';
+    videoTakeoverBtn.style.display = showVideoTakeover ? 'inline-flex' : 'none';
     directionalBtn.style.display = showDirectional ? 'inline-flex' : 'none';
     precisionStrikeBtn.style.display = showPrecisionStrike ? 'inline-flex' : 'none';
     updateWideJamButtonState(target);
+    updateVideoTakeoverButtonState(target);
     updatePrecisionStrikeButtonState(target);
     actionsNode.style.display =
-        (showWhitelist || showWideJam || showDirectional || showPrecisionStrike) ? 'flex' : 'none';
-    if (!showWideJam && !showPrecisionStrike) {
+        (showWhitelist || showWideJam || showVideoTakeover || showDirectional || showPrecisionStrike) ? 'flex' : 'none';
+    if (!showWideJam && !showVideoTakeover && !showPrecisionStrike) {
         showTargetActionHint('', false);
         return;
     }

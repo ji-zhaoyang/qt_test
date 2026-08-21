@@ -24,6 +24,7 @@ SOURCES += \
         src/coordinators/home_coordinator.cpp \
         src/coordinators/history_coordinator.cpp \
         src/coordinators/settings_coordinator.cpp \
+        src/coordinators/stats_coordinator.cpp \
         src/main.cpp \
         src/mainwindow.cpp \
         src/network/core/tcp_manager.cpp \
@@ -31,8 +32,8 @@ SOURCES += \
         src/network/dispatch/tcp_manager_device_delegates.cpp \
         src/network/dispatch/tcp_manager_settings_delegates.cpp \
         src/network/dispatch/tcp_manager_spectrum_delegates.cpp \
-        src/components/screen_flash_overlay.cpp \
         src/components/top_nav_bar.cpp \
+        src/components/datetime_picker_popup.cpp \
         src/services/calibration_service.cpp \
         src/services/drone_ops_service.cpp \
         src/services/device_ops_service.cpp \
@@ -40,11 +41,21 @@ SOURCES += \
         src/services/settings_protocol_service.cpp \
         src/services/local_time_service_client.cpp \
         src/repositories/history_repository.cpp \
+        src/repositories/stats_repository.cpp \
+        src/repositories/whitelist_repository.cpp \
+        src/preferences/alarm_preferences.cpp \
         src/views/history/history_page.cpp \
+        src/views/history/pilot_location_dialog.cpp \
         src/views/home/home_page.cpp \
         src/views/home/home_web_bridge.cpp \
+        src/views/home/video_takeover/video_frame_decode_worker.cpp \
+        src/views/home/video_takeover/video_frame_pipeline.cpp \
+        src/views/home/video_takeover/video_takeover_facade.cpp \
+        src/views/home/video_takeover/video_takeover_panel_controller.cpp \
+        src/views/home/video_takeover/video_takeover_widget.cpp \
         src/views/home/bottom_console.cpp \
         src/views/statistics/stats_page.cpp \
+        src/views/statistics/stats_web_bridge.cpp \
         src/views/settings/alarm_history/alarm_history_page.cpp \
         src/views/settings/angle_calibration/angle_calibration_page.cpp \
         src/views/settings/authorization_info/authorization_info_page.cpp \
@@ -65,7 +76,8 @@ SOURCES += \
         src/views/settings/system_function/system_function_page.cpp \
         src/views/settings/settings_page.cpp \
         src/views/settings/device/map_picker_dialog.cpp \
-        src/views/whitelist/whitelist_page.cpp
+        src/views/whitelist/whitelist_page.cpp \
+        src/views/whitelist/whitelist_edit_dialog.cpp
 
 HEADERS += \
         src/app_config.h \
@@ -74,12 +86,13 @@ HEADERS += \
         src/coordinators/home_coordinator.h \
         src/coordinators/history_coordinator.h \
         src/coordinators/settings_coordinator.h \
+        src/coordinators/stats_coordinator.h \
         src/device_status.h \
         src/mainwindow.h \
         src/network/core/protocol_types.h \
         src/network/core/tcp_manager.h \
-        src/components/screen_flash_overlay.h \
         src/components/top_nav_bar.h \
+        src/components/datetime_picker_popup.h \
         src/services/calibration_service.h \
         src/services/drone_ops_service.h \
         src/services/device_ops_service.h \
@@ -87,11 +100,22 @@ HEADERS += \
         src/services/settings_protocol_service.h \
         src/services/local_time_service_client.h \
         src/repositories/history_repository.h \
+        src/repositories/stats_repository.h \
+        src/repositories/whitelist_repository.h \
+        src/preferences/alarm_preferences.h \
         src/views/history/history_page.h \
+        src/views/history/pilot_location_dialog.h \
         src/views/home/home_page.h \
         src/views/home/home_web_bridge.h \
+        src/views/home/video_takeover/video_frame_decode_worker.h \
+        src/views/home/video_takeover/video_frame_pipeline.h \
+        src/views/home/video_takeover/video_takeover_constants.h \
+        src/views/home/video_takeover/video_takeover_facade.h \
+        src/views/home/video_takeover/video_takeover_panel_controller.h \
+        src/views/home/video_takeover/video_takeover_widget.h \
         src/views/home/bottom_console.h \
         src/views/statistics/stats_page.h \
+        src/views/statistics/stats_web_bridge.h \
         src/views/settings/alarm_history/alarm_history_page.h \
         src/views/settings/angle_calibration/angle_calibration_page.h \
         src/views/settings/authorization_info/authorization_info_page.h \
@@ -113,7 +137,8 @@ HEADERS += \
         src/views/settings/settings_page.h \
         src/views/settings/settings_role.h \
         src/views/settings/device/map_picker_dialog.h \
-        src/views/whitelist/whitelist_page.h
+        src/views/whitelist/whitelist_page.h \
+        src/views/whitelist/whitelist_edit_dialog.h
 
 INCLUDEPATH += \
         $$PWD/src \
@@ -122,8 +147,11 @@ INCLUDEPATH += \
         $$PWD/src/network/core \
         $$PWD/src/network/dispatch \
         $$PWD/src/services \
+        $$PWD/src/repositories \
+        $$PWD/src/preferences \
         $$PWD/src/views \
         $$PWD/src/views/home \
+        $$PWD/src/views/home/video_takeover \
         $$PWD/src/views/history \
         $$PWD/src/views/settings \
         $$PWD/src/views/settings/alarm_history \

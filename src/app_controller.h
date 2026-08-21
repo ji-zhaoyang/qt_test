@@ -13,8 +13,12 @@ class HistoryRepository;
 class LocalTimeServiceClient;
 class SettingsPage;
 class SettingsCoordinator;
+class StatsCoordinator;
+class StatsPage;
+class StatsRepository;
 class TcpManager;
 class DatabaseManager;
+class WhitelistRepository;
 class QJsonObject;
 
 class AppController : public QObject
@@ -22,14 +26,16 @@ class AppController : public QObject
     Q_OBJECT
 
   public:
-    explicit AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage, QObject *parent = nullptr);
-    AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage, const ConnectionConfig &connectionConfig,
-                  QObject *parent = nullptr);
+    explicit AppController(HomePage *homePage, HistoryPage *historyPage, StatsPage *statsPage,
+                           SettingsPage *settingsPage, QObject *parent = nullptr);
+    AppController(HomePage *homePage, HistoryPage *historyPage, StatsPage *statsPage, SettingsPage *settingsPage,
+                  const ConnectionConfig &connectionConfig, QObject *parent = nullptr);
 
     void connectToDevice();
     void setConnectionConfig(const ConnectionConfig &connectionConfig);
     const ConnectionConfig &connectionConfig() const;
     const DeviceStatus &deviceStatus() const;
+    WhitelistRepository *whitelistRepository() const;
 
   signals:
     void deviceStatusChanged();
@@ -48,8 +54,11 @@ class AppController : public QObject
     HomeCoordinator *homeCoordinator;
     HistoryCoordinator *historyCoordinator;
     SettingsCoordinator *settingsCoordinator;
+    StatsCoordinator *statsCoordinator;
     DatabaseManager *databaseManager;
     HistoryRepository *historyRepository;
+    StatsRepository *statsRepository;
+    WhitelistRepository *whitelistRepository_;
     LocalTimeServiceClient *localTimeServiceClient;
     TcpManager *tcpManager;
     ConnectionConfig connectionConfigValue;

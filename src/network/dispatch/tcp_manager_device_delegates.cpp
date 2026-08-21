@@ -2,6 +2,7 @@
 #include "services/calibration_service.h"
 #include "services/device_ops_service.h"
 #include "services/drone_ops_service.h"
+#include <QDebug>
 
 void TcpManager::setDronePrecisionStrike(bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId)
 {
@@ -21,6 +22,16 @@ void TcpManager::setDroneWideBandJamming(bool enabled, quint32 frequencyKhz, con
     }
 
     droneOpsService->setDroneWideBandJamming(enabled, frequencyKhz, sn, targetId);
+}
+
+void TcpManager::setDroneVideoTakeover(bool enabled, quint32 frequencyKhz, quint32 targetId)
+{
+    if (!droneOpsService)
+    {
+        return;
+    }
+
+    droneOpsService->setDroneVideoTakeover(enabled, frequencyKhz, targetId);
 }
 
 bool TcpManager::dispatchDeviceOpsProtocol(const ProtocolHeader *header, const QByteArray &frameData)
@@ -55,6 +66,18 @@ bool TcpManager::dispatchDeviceOpsProtocol(const ProtocolHeader *header, const Q
         if (droneOpsService)
         {
             droneOpsService->handleDroneWideBandJammingResponse(frameData);
+        }
+        return true;
+    case 290:
+        if (droneOpsService)
+        {
+            droneOpsService->handleDroneVideoTakeoverResponse(frameData);
+        }
+        return true;
+    case 291:
+        if (droneOpsService)
+        {
+            droneOpsService->handleDroneVideoImageReport(frameData);
         }
         return true;
     case 93:

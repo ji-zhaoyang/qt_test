@@ -13,6 +13,7 @@
     <div class="app-layout">
         <div class="map-pane">
             <div id="map"></div>
+            <div id="map-alarm-overlay" class="map-alarm-overlay" hidden></div>
 
             <div class="custom-controls">
                 <button class="map-btn" id="btn-zoom-in" title="放大">＋</button>
@@ -137,6 +138,7 @@
                     <div class="target-detail-card__actions" id="target-detail-actions" style="display:none;">
                         <button class="target-detail-card__action-btn" id="detail-whitelist-btn" style="display:none;">白名单</button>
                         <button class="target-detail-card__action-btn" id="detail-wide-jam-btn" style="display:none;">宽频干扰</button>
+                        <button class="target-detail-card__action-btn" id="detail-video-takeover-btn" style="display:none;">图传接管</button>
                         <button class="target-detail-card__action-btn" id="detail-directional-btn" style="display:none;">测向</button>
                         <button class="target-detail-card__action-btn" id="detail-precision-strike-btn" style="display:none;">精准打击</button>
                     </div>

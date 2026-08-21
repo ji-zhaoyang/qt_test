@@ -96,8 +96,8 @@ private slots:
 
 private:
 
+    void applyDefaultDateRange();
     void setupUi();
-    void setupToolbar(QVBoxLayout *pageLayout);
     void setupFilterBar(QVBoxLayout *pageLayout);
     void setupTable(QVBoxLayout *pageLayout);
     void setupPagination(QVBoxLayout *pageLayout);
@@ -122,8 +122,6 @@ private:
     int pageSize_ = 10;
     int totalRecords_ = 0;
 
-    QPushButton *exportButton_ = nullptr;
-    QPushButton *batchReplayButton_ = nullptr;
     QLineEdit *serialEdit_ = nullptr;
     QComboBox *detectTypeCombo_ = nullptr;
     QDateTimeEdit *startTimeEdit_ = nullptr;

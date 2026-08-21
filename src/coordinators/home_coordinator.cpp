@@ -1,13 +1,17 @@
 #include "home_coordinator.h"
 
 #include "network/core/tcp_manager.h"
+#include "repositories/stats_repository.h"
 #include "views/home/home_page.h"
+#include "views/home/video_takeover/video_takeover_facade.h"
 #include "views/settings/settings_page.h"
 
 #include <QJsonObject>
 
-HomeCoordinator::HomeCoordinator(HomePage *homePage, SettingsPage *settingsPage, TcpManager *tcpManager, QObject *parent)
-    : QObject(parent), homePage_(homePage), settingsPage_(settingsPage), tcpManager_(tcpManager)
+HomeCoordinator::HomeCoordinator(HomePage *homePage, SettingsPage *settingsPage, TcpManager *tcpManager,
+                                 StatsRepository *statsRepository, QObject *parent)
+    : QObject(parent), homePage_(homePage), settingsPage_(settingsPage), tcpManager_(tcpManager),
+      statsRepository_(statsRepository)
 {
 }
 
@@ -26,6 +30,13 @@ void HomeCoordinator::setupConnections()
             homePage_, &HomePage::updateDronePrecisionStrikeResponse);
     connect(tcpManager_, &TcpManager::droneWideBandJammingResponse,
             homePage_, &HomePage::updateDroneWideBandJammingResponse);
+    if (VideoTakeoverFacade *videoTakeover = homePage_->videoTakeoverFacade())
+    {
+        connect(tcpManager_, &TcpManager::droneVideoTakeoverResponse, videoTakeover,
+                &VideoTakeoverFacade::on290);
+        connect(tcpManager_, &TcpManager::droneVideoImageReported, videoTakeover, &VideoTakeoverFacade::on291);
+        connect(tcpManager_, &TcpManager::disconnected, videoTakeover, &VideoTakeoverFacade::onConnectionLost);
+    }
     connect(tcpManager_, &TcpManager::deviceJammingModeSetResponse,
             homePage_, &HomePage::updateDeviceJammingSetResponse);
     connect(tcpManager_, &TcpManager::deviceJammingModeReported,
@@ -59,6 +70,31 @@ void HomeCoordinator::setupConnections()
             {
                 tcpManager_->setDroneWideBandJamming(enabled, frequencyKhz, sn, targetId);
             });
+    connect(homePage_, &HomePage::requestDroneVideoTakeover, this,
+            [this](bool enabled, quint32 frequencyKhz, quint32 targetId)
+            {
+                tcpManager_->setDroneVideoTakeover(enabled, frequencyKhz, targetId);
+            });
+
+    if (statsRepository_)
+    {
+        connect(tcpManager_, &TcpManager::dronePrecisionStrikeResponse, this,
+                [this](quint32 targetId, bool enabled, bool success, const QString &)
+                {
+                    if (enabled && success)
+                    {
+                        statsRepository_->insertCounterEvent(QStringLiteral("precision_strike"), targetId, true);
+                    }
+                });
+        connect(tcpManager_, &TcpManager::droneWideBandJammingResponse, this,
+                [this](quint32 targetId, bool enabled, bool success, const QString &)
+                {
+                    if (enabled && success)
+                    {
+                        statsRepository_->insertCounterEvent(QStringLiteral("wide_band_jamming"), targetId, true);
+                    }
+                });
+    }
 }
 
 void HomeCoordinator::initializeState()

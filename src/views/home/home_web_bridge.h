@@ -32,18 +32,24 @@ public:
     void sendDirectionPowerReport(const QJsonObject &reportData);
     void sendPrecisionStrikeResponse(quint32 targetId, bool enabled, bool success, const QString &message);
     void sendWideBandJammingResponse(quint32 targetId, bool enabled, bool success, const QString &message);
+    void sendVideoTakeoverResponse(quint32 targetId, bool enabled, bool success, const QString &message);
+    void setMapAlarmFlashActive(bool active);
 
 signals:
     void fullscreenRequested(bool enabled);
     void directionFindingRequested(bool enabled, quint32 targetId);
     void precisionStrikeRequested(bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId);
     void wideBandJammingRequested(bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId);
+    void videoTakeoverRequested(bool enabled, quint32 frequencyKhz, quint32 targetId);
+    void whitelistAddRequested(const QString &serialNumber, const QString &recordKey);
     void unknownCommandReceived(const QString &title);
 
 private:
     bool handleDirectionFindingCommand(const QStringList &parts);
     bool handlePrecisionStrikeCommand(const QStringList &parts);
     bool handleWideBandJammingCommand(const QStringList &parts);
+    bool handleVideoTakeoverCommand(const QStringList &parts);
+    bool handleWhitelistAddCommand(const QStringList &parts);
     void resetPageTitle() const;
 
     QPointer<QWebEngineView> webView_;

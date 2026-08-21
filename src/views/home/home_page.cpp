@@ -1,11 +1,15 @@
 #include "home_page.h"
 #include "bottom_console.h"
 #include "home_web_bridge.h"
+#include "repositories/whitelist_repository.h"
+#include "video_takeover/video_takeover_facade.h"
+#include "views/whitelist/whitelist_page.h"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMap>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QTimer>
 #include <QUrl>
@@ -15,8 +19,17 @@
 
 namespace
 {
-const int kHomeRightPanelWidth = 336;
+QString resolveTargetKey(const QJsonObject &targetInfo)
+{
+    const QString targetUniqueId = targetInfo.value(QStringLiteral("targetUniqueId")).toString().trimmed();
+    if (!targetUniqueId.isEmpty())
+    {
+        return targetUniqueId;
+    }
+
+    return QString::number(targetInfo.value(QStringLiteral("targetId")).toInt());
 }
+} // namespace
 
 /**
  * @brief 首页页面构造函数，初始化地图WebView、Web桥接器、底部控制台等核心组件。
@@ -29,10 +42,10 @@ const int kHomeRightPanelWidth = 336;
  * @param parent 父QWidget，用于Qt对象树内存管理，默认为nullptr
  */
 HomePage::HomePage(QWidget *parent)
-    : QWidget(parent), mapWebView(nullptr), homeWebBridge(nullptr), bottomBar(nullptr), rightPanel(nullptr),
-      rightPanelTitleLabel(nullptr), rightPanelCountValueLabel(nullptr), rightPanelModelValueLabel(nullptr),
-      rightPanelSerialValueLabel(nullptr), rightPanelFrequencyValueLabel(nullptr), rightPanelDistanceValueLabel(nullptr),
-      bottomConsole(nullptr), mapPageLoaded(false), hasPendingDeviceInfo(false), pendingLng(0.0), pendingLat(0.0),
+    : QWidget(parent), mapWebView(nullptr), homeWebBridge(nullptr), videoTakeoverFacade_(nullptr),
+      whitelistRepository(nullptr), bottomBar(nullptr),
+      bottomConsole(nullptr), mapPageLoaded(false), hasPendingDeviceInfo(false), screenFlashEnabled(false),
+      homePageVisible(true), mapAlarmFlashActive(false), pendingLng(0.0), pendingLat(0.0),
       pendingAlt(0.0), pendingYaw(0.0), pendingPitch(0.0), pendingWarningRemoveTimeSeconds(20),
       commJammingEnabled(false), navJammingEnabled(false), toastWidget(nullptr), toastLabel(nullptr),
       toastTimer(new QTimer(this)), droneTargetCleanupTimer(new QTimer(this))
@@ -54,6 +67,13 @@ HomePage::HomePage(QWidget *parent)
     setupUi();
     setupConnections();
 }
+
+VideoTakeoverFacade *HomePage::videoTakeoverFacade() const
+{
+    return videoTakeoverFacade_;
+}
+
+HomePage::~HomePage() = default;
 
 void HomePage::setupUi()
 {
@@ -78,15 +98,8 @@ void HomePage::setupUi()
     bottomBarLayout->setSpacing(0);
 
     // 干扰控制按钮区
-    bottomConsole = new BottomConsole(bottomBar);   // 干扰控制按钮
-    bottomBarLayout->addWidget(bottomConsole, 1);   // 占据剩余空间，自动拉伸
-    rightPanel = nullptr;
-    rightPanelTitleLabel = nullptr;
-    rightPanelCountValueLabel = nullptr;
-    rightPanelModelValueLabel = nullptr;
-    rightPanelSerialValueLabel = nullptr;
-    rightPanelFrequencyValueLabel = nullptr;
-    rightPanelDistanceValueLabel = nullptr;
+    bottomConsole = new BottomConsole(bottomBar);
+    bottomBarLayout->addWidget(bottomConsole, 1);
     layout->addWidget(bottomBar);
 
     toastWidget = new QWidget(this);
@@ -102,6 +115,9 @@ void HomePage::setupUi()
     toastLayout->addWidget(toastLabel);
     toastWidget->setGraphicsEffect(nullptr);
     toastWidget->hide();
+
+    videoTakeoverFacade_ = new VideoTakeoverFacade(this, mapWebView, this);
+    videoTakeoverFacade_->setWebBridge(homeWebBridge);
 }
 
 void HomePage::setupConnections()
@@ -124,6 +140,11 @@ void HomePage::setupConnections()
                     {
                         homeWebBridge->sendWarningRemoveTimeSeconds(pendingWarningRemoveTimeSeconds);
                     }
+                    evaluateMapAlarmFlash(true);
+                }
+                if (videoTakeoverFacade_)
+                {
+                    videoTakeoverFacade_->setMapPageLoaded(ok);
                 }
                 if (ok && mapWebView)
                 {
@@ -170,12 +191,21 @@ void HomePage::setupConnections()
     connect(homeWebBridge, &HomeWebBridge::directionFindingRequested, this, &HomePage::requestDroneDirectionFinding);
     connect(homeWebBridge, &HomeWebBridge::precisionStrikeRequested, this, &HomePage::requestDronePrecisionStrike);
     connect(homeWebBridge, &HomeWebBridge::wideBandJammingRequested, this, &HomePage::requestDroneWideBandJamming);
+    connect(homeWebBridge, &HomeWebBridge::videoTakeoverRequested, videoTakeoverFacade_,
+            &VideoTakeoverFacade::onUserRequest);
+    connect(homeWebBridge, &HomeWebBridge::whitelistAddRequested, this, &HomePage::addTargetToWhitelist);
+    connect(videoTakeoverFacade_, &VideoTakeoverFacade::takeoverRequested, this, &HomePage::requestDroneVideoTakeover);
+    connect(videoTakeoverFacade_, &VideoTakeoverFacade::toastRequested, this, &HomePage::showHomeToast);
 }
 
 void HomePage::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     updateHomeToastPosition();
+    if (videoTakeoverFacade_)
+    {
+        videoTakeoverFacade_->updateMapGeometry();
+    }
 }
 
 void HomePage::showHomeToast(const QString &text)
@@ -208,97 +238,6 @@ void HomePage::updateHomeToastPosition()
     const int x = qMax(12, (width() - toastWidget->width()) / 2);
     const int y = 28;
     toastWidget->move(x, y);
-}
-
-void HomePage::updateRightPanelVisibility()
-{
-    if (!rightPanel)
-    {
-        return;
-    }
-
-    const bool hasTargets = !pendingDroneTargets.isEmpty();
-    rightPanel->setVisible(hasTargets);
-
-    if (!hasTargets)
-    {
-        if (rightPanelCountValueLabel)
-        {
-            rightPanelCountValueLabel->setText(QStringLiteral("0"));
-        }
-        if (rightPanelModelValueLabel)
-        {
-            rightPanelModelValueLabel->setText(QStringLiteral("--"));
-        }
-        if (rightPanelSerialValueLabel)
-        {
-            rightPanelSerialValueLabel->setText(QStringLiteral("--"));
-        }
-        if (rightPanelFrequencyValueLabel)
-        {
-            rightPanelFrequencyValueLabel->setText(QStringLiteral("--"));
-        }
-        if (rightPanelDistanceValueLabel)
-        {
-            rightPanelDistanceValueLabel->setText(QStringLiteral("--"));
-        }
-    }
-}
-
-void HomePage::refreshRightPanelContentFromPendingTargets()
-{
-    if (pendingDroneTargets.isEmpty())
-    {
-        updateRightPanelVisibility();
-        return;
-    }
-
-    QString latestTargetKey;
-    QDateTime latestSeenAt;
-    for (auto it = pendingDroneTargetLastSeenAt.cbegin(); it != pendingDroneTargetLastSeenAt.cend(); ++it)
-    {
-        if (!pendingDroneTargets.contains(it.key()))
-        {
-            continue;
-        }
-        if (latestTargetKey.isEmpty() || it.value() > latestSeenAt)
-        {
-            latestTargetKey = it.key();
-            latestSeenAt = it.value();
-        }
-    }
-
-    if (latestTargetKey.isEmpty())
-    {
-        refreshRightPanelContent(pendingDroneTargets.cbegin().value());
-        return;
-    }
-
-    refreshRightPanelContent(pendingDroneTargets.value(latestTargetKey));
-}
-
-void HomePage::refreshRightPanelContent(const QJsonObject &targetInfo)
-{
-    if (rightPanelCountValueLabel)
-    {
-        rightPanelCountValueLabel->setText(QString::number(pendingDroneTargets.size()));
-    }
-    if (rightPanelModelValueLabel)
-    {
-        rightPanelModelValueLabel->setText(resolvePanelModelName(targetInfo));
-    }
-    if (rightPanelSerialValueLabel)
-    {
-        rightPanelSerialValueLabel->setText(resolvePanelSerialNumber(targetInfo));
-    }
-    if (rightPanelFrequencyValueLabel)
-    {
-        rightPanelFrequencyValueLabel->setText(formatPanelFrequency(targetInfo.value(QStringLiteral("frequencyKhz")).toDouble()));
-    }
-    if (rightPanelDistanceValueLabel)
-    {
-        rightPanelDistanceValueLabel->setText(QStringLiteral("%1米").arg(targetInfo.value(QStringLiteral("distance")).toInt()));
-    }
 }
 
 void HomePage::cleanupExpiredDroneTargets()
@@ -336,40 +275,121 @@ void HomePage::cleanupExpiredDroneTargets()
         pendingDroneTargetLastSeenAt.remove(key);
     }
 
-    updateRightPanelVisibility();
-    refreshRightPanelContentFromPendingTargets();
+    evaluateMapAlarmFlash();
 }
 
-QString HomePage::formatPanelFrequency(double frequencyKhz) const
+void HomePage::setWhitelistRepository(WhitelistRepository *repository)
 {
-    if (frequencyKhz >= 1000000.0)
+    if (whitelistRepository == repository)
     {
-        return QStringLiteral("%1GHz").arg(QString::number(frequencyKhz / 1000000.0, 'f', 3));
+        return;
     }
-    return QStringLiteral("%1MHz").arg(QString::number(frequencyKhz / 1000.0, 'f', 0));
+
+    if (whitelistRepository)
+    {
+        disconnect(whitelistRepository, nullptr, this, nullptr);
+    }
+
+    whitelistRepository = repository;
+    if (whitelistRepository)
+    {
+        connect(whitelistRepository, &WhitelistRepository::changed, this,
+                [this]()
+                {
+                    evaluateMapAlarmFlash();
+                });
+    }
+
+    evaluateMapAlarmFlash();
 }
 
-QString HomePage::resolvePanelSerialNumber(const QJsonObject &targetInfo) const
+void HomePage::setScreenFlashEnabled(bool enabled)
 {
-    const QString uniqueId = targetInfo.value(QStringLiteral("targetUniqueId")).toString().trimmed();
-    if (!uniqueId.isEmpty())
-    {
-        return uniqueId;
-    }
-
-    const qint64 targetId = targetInfo.value(QStringLiteral("targetId")).toVariant().toLongLong();
-    if (targetId > 0)
-    {
-        return QStringLiteral("目标-%1").arg(targetId);
-    }
-
-    return QStringLiteral("--");
+    screenFlashEnabled = enabled;
+    evaluateMapAlarmFlash();
 }
 
-QString HomePage::resolvePanelModelName(const QJsonObject &targetInfo) const
+void HomePage::setHomePageVisible(bool visible)
 {
-    const QString modelName = targetInfo.value(QStringLiteral("targetName")).toString().trimmed();
-    return modelName.isEmpty() ? QStringLiteral("未知型号") : modelName;
+    homePageVisible = visible;
+    evaluateMapAlarmFlash();
+}
+
+void HomePage::addTargetToWhitelist(const QString &serialNumber, const QString &recordKey)
+{
+    if (!whitelistRepository)
+    {
+        showHomeToast(QStringLiteral("白名单未就绪"));
+        return;
+    }
+
+    const QString serial = serialNumber.trimmed().isEmpty() ? recordKey.trimmed() : serialNumber.trimmed();
+    if (serial.isEmpty())
+    {
+        showHomeToast(QStringLiteral("目标序列号为空"));
+        return;
+    }
+
+    WhitelistPage::WhitelistRecord existing;
+    if (whitelistRepository->findBySerialNumber(serial, &existing))
+    {
+        showHomeToast(QStringLiteral("该目标已在白名单中"));
+        evaluateMapAlarmFlash(true);
+        return;
+    }
+
+    WhitelistPage::WhitelistRecord record;
+    record.serialNumber = serial;
+    record.recordKey = recordKey.trimmed().isEmpty() ? serial : recordKey.trimmed();
+    record.modelName = QStringLiteral("");
+    record.effectiveTime = QStringLiteral("permanent");
+    record.effectiveArea = QStringLiteral("unlimited");
+
+    if (!whitelistRepository->insertRecord(record))
+    {
+        const QString message = whitelistRepository->lastError().trimmed().isEmpty()
+                                    ? QStringLiteral("加入白名单失败")
+                                    : whitelistRepository->lastError();
+        showHomeToast(message);
+        return;
+    }
+
+    showHomeToast(QStringLiteral("已加入白名单"));
+    evaluateMapAlarmFlash(true);
+}
+
+void HomePage::evaluateMapAlarmFlash(bool forcePush)
+{
+    bool hasNonWhitelistDrone = false;
+
+    for (auto it = pendingDroneTargets.cbegin(); it != pendingDroneTargets.cend(); ++it)
+    {
+        const QJsonObject &targetInfo = it.value();
+        if (targetInfo.value(QStringLiteral("disappeared")).toBool())
+        {
+            continue;
+        }
+
+        if (whitelistRepository && whitelistRepository->containsForTarget(targetInfo))
+        {
+            continue;
+        }
+
+        hasNonWhitelistDrone = true;
+        break;
+    }
+
+    const bool showFlash = screenFlashEnabled && homePageVisible && mapPageLoaded && hasNonWhitelistDrone;
+    if (!forcePush && showFlash == mapAlarmFlashActive)
+    {
+        return;
+    }
+
+    mapAlarmFlashActive = showFlash;
+    if (homeWebBridge)
+    {
+        homeWebBridge->setMapAlarmFlashActive(showFlash);
+    }
 }
 
 void HomePage::updateDeviceInfo(double lng, double lat, double alt, double yaw, double pitch)
@@ -401,15 +421,14 @@ void HomePage::updateDeviceInfo(double lng, double lat, double alt, double yaw, 
 
 void HomePage::updateDroneTargetInfo(const QJsonObject &targetInfo)
 {
-    const QString targetKey = targetInfo.value(QStringLiteral("targetUniqueId")).toString().trimmed().isEmpty()
-                                  ? QString::number(targetInfo.value(QStringLiteral("targetId")).toInt())
-                                  : targetInfo.value(QStringLiteral("targetUniqueId")).toString().trimmed();
+    const QString targetKey = resolveTargetKey(targetInfo);
     if (targetKey.isEmpty())
     {
         return;
     }
 
-    if (targetInfo.value(QStringLiteral("disappeared")).toBool())
+    const bool disappeared = targetInfo.value(QStringLiteral("disappeared")).toBool();
+    if (disappeared)
     {
         pendingDroneTargets.remove(targetKey);
         pendingDroneTargetLastSeenAt.remove(targetKey);
@@ -420,15 +439,7 @@ void HomePage::updateDroneTargetInfo(const QJsonObject &targetInfo)
         pendingDroneTargetLastSeenAt.insert(targetKey, QDateTime::currentDateTime());
     }
 
-    updateRightPanelVisibility();
-    if (!targetInfo.value(QStringLiteral("disappeared")).toBool())
-    {
-        refreshRightPanelContent(targetInfo);
-    }
-    else
-    {
-        refreshRightPanelContentFromPendingTargets();
-    }
+    evaluateMapAlarmFlash();
 
     if (!mapPageLoaded)
     {
@@ -447,6 +458,7 @@ void HomePage::setWarningRemoveTimeSeconds(int seconds)
 {
     pendingWarningRemoveTimeSeconds = qMax(0, seconds);
     qDebug().noquote() << QStringLiteral("[WarningRemoveTime][Home] seconds=%1").arg(pendingWarningRemoveTimeSeconds);
+    evaluateMapAlarmFlash();
     if (!mapPageLoaded)
     {
         return;

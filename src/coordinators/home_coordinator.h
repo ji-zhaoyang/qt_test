@@ -5,6 +5,7 @@
 
 class HomePage;
 class SettingsPage;
+class StatsRepository;
 class TcpManager;
 class QJsonObject;
 
@@ -14,7 +15,7 @@ class HomeCoordinator : public QObject
 
 public:
     explicit HomeCoordinator(HomePage *homePage, SettingsPage *settingsPage, TcpManager *tcpManager,
-                             QObject *parent = nullptr);
+                             StatsRepository *statsRepository = nullptr, QObject *parent = nullptr);
 
     void setupConnections();
     void initializeState();
@@ -27,6 +28,7 @@ private:
     HomePage *homePage_;
     SettingsPage *settingsPage_;
     TcpManager *tcpManager_;
+    StatsRepository *statsRepository_;
 };
 
 #endif // HOME_COORDINATOR_H

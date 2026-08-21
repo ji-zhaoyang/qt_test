@@ -2,27 +2,33 @@
 #include "coordinators/home_coordinator.h"
 #include "coordinators/history_coordinator.h"
 #include "coordinators/settings_coordinator.h"
+#include "coordinators/stats_coordinator.h"
 #include "database/database_manager.h"
 #include "network/core/tcp_manager.h"
 #include "repositories/history_repository.h"
+#include "repositories/stats_repository.h"
+#include "repositories/whitelist_repository.h"
 #include "services/local_time_service_client.h"
 #include "views/history/history_page.h"
 #include "views/home/home_page.h"
 #include "views/settings/settings_page.h"
+#include "views/statistics/stats_page.h"
 #include <QDebug>
 #include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 
-AppController::AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage, QObject *parent)
-    : AppController(homePage, historyPage, settingsPage, AppConfig::defaultConnectionConfig(), parent)
+AppController::AppController(HomePage *homePage, HistoryPage *historyPage, StatsPage *statsPage,
+                             SettingsPage *settingsPage, QObject *parent)
+    : AppController(homePage, historyPage, statsPage, settingsPage, AppConfig::defaultConnectionConfig(), parent)
 {
 }
 
-AppController::AppController(HomePage *homePage, HistoryPage *historyPage, SettingsPage *settingsPage,
-                             const ConnectionConfig &connectionConfig, QObject *parent)
+AppController::AppController(HomePage *homePage, HistoryPage *historyPage, StatsPage *statsPage,
+                             SettingsPage *settingsPage, const ConnectionConfig &connectionConfig, QObject *parent)
     : QObject(parent), homeCoordinator(nullptr), historyCoordinator(nullptr), settingsCoordinator(nullptr),
-      databaseManager(new DatabaseManager(this)), historyRepository(nullptr),
+      statsCoordinator(nullptr), databaseManager(new DatabaseManager(this)), historyRepository(nullptr),
+      statsRepository(nullptr), whitelistRepository_(nullptr),
       localTimeServiceClient(new LocalTimeServiceClient(this)), tcpManager(new TcpManager(this)),
       connectionConfigValue(connectionConfig)
 {
@@ -36,14 +42,29 @@ AppController::AppController(HomePage *homePage, HistoryPage *historyPage, Setti
             historyRepository->deleteLater();
             historyRepository = nullptr;
         }
+
+        statsRepository = new StatsRepository(databaseManager->database(), this);
+        if (!statsRepository->initialize())
+        {
+            qWarning() << "报表统计数据库初始化失败:" << databaseManager->database().lastError().text();
+        }
+
+        whitelistRepository_ = new WhitelistRepository(databaseManager->database(), this);
+        if (!whitelistRepository_->initialize())
+        {
+            qWarning() << "白名单数据库初始化失败:" << databaseManager->database().lastError().text();
+            whitelistRepository_->deleteLater();
+            whitelistRepository_ = nullptr;
+        }
     }
     else
     {
         qWarning() << "SQLite 数据库打开失败:" << databaseManager->databasePath();
     }
-    homeCoordinator = new HomeCoordinator(homePage, settingsPage, tcpManager, this);
+    homeCoordinator = new HomeCoordinator(homePage, settingsPage, tcpManager, statsRepository, this);
     historyCoordinator = new HistoryCoordinator(historyPage, settingsPage, tcpManager, historyRepository, this);
     settingsCoordinator = new SettingsCoordinator(settingsPage, tcpManager, localTimeServiceClient, this);
+    statsCoordinator = new StatsCoordinator(statsPage, statsRepository, this);
     setupConnections();
 }
 
@@ -68,6 +89,11 @@ const ConnectionConfig &AppController::connectionConfig() const
 const DeviceStatus &AppController::deviceStatus() const
 {
     return deviceStatusValue;
+}
+
+WhitelistRepository *AppController::whitelistRepository() const
+{
+    return whitelistRepository_;
 }
 
 void AppController::setupConnections()
@@ -95,6 +121,10 @@ void AppController::setupConnections()
     {
         historyCoordinator->setupConnections();
         historyCoordinator->initializeState();
+    }
+    if (statsCoordinator)
+    {
+        statsCoordinator->setupConnections();
     }
 }
 

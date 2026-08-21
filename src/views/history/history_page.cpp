@@ -1,4 +1,4 @@
-#include "history_page.h"
+﻿#include "history_page.h"
 
 #include <algorithm>
 #include <QAbstractItemView>
@@ -6,6 +6,7 @@
 #include <QCalendarWidget>
 #include <QColor>
 #include <QCoreApplication>
+#include <QDate>
 #include <QDateTimeEdit>
 #include <QDialog>
 #include <QDir>
@@ -28,6 +29,7 @@
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QShowEvent>
+#include <QTime>
 #include <QSlider>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -1189,10 +1191,8 @@ HistoryPage::QueryCriteria HistoryPage::currentQueryCriteria() const
     QueryCriteria criteria;
     criteria.serialKeyword = serialEdit_ ? serialEdit_->text().trimmed() : QString();
     criteria.detectType = detectTypeCombo_ ? detectTypeCombo_->currentText().trimmed() : QStringLiteral("请选择");
-    criteria.startTime =
-        (startTimeEdit_ && startTimeEdit_->dateTime() != startTimeEdit_->minimumDateTime()) ? startTimeEdit_->dateTime() : QDateTime();
-    criteria.endTime =
-        (endTimeEdit_ && endTimeEdit_->dateTime() != endTimeEdit_->minimumDateTime()) ? endTimeEdit_->dateTime() : QDateTime();
+    criteria.startTime = startTimeEdit_ ? startTimeEdit_->dateTime() : QDateTime();
+    criteria.endTime = endTimeEdit_ ? endTimeEdit_->dateTime() : QDateTime();
     criteria.page = currentPage_;
     criteria.pageSize = pageSize_;
     return criteria;
@@ -1227,7 +1227,6 @@ void HistoryPage::setupUi()
     pageLayout->setContentsMargins(10, 10, 10, 14);
     pageLayout->setSpacing(10);
 
-    setupToolbar(pageLayout);
     setupFilterBar(pageLayout);
     setupTable(pageLayout);
     setupPagination(pageLayout);
@@ -1257,30 +1256,6 @@ void HistoryPage::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     updateTimePickerPopupPosition();
-}
-
-void HistoryPage::setupToolbar(QVBoxLayout *pageLayout)
-{
-    QFrame *toolbarFrame = new QFrame(this);
-    toolbarFrame->setStyleSheet(QStringLiteral("QFrame { background-color: transparent; }"));
-
-    QHBoxLayout *toolbarLayout = new QHBoxLayout(toolbarFrame);
-    toolbarLayout->setContentsMargins(0, 0, 0, 0);
-    toolbarLayout->setSpacing(8);
-
-    exportButton_ = new QPushButton(QStringLiteral("导出"), toolbarFrame);
-    exportButton_->setFixedSize(72, 32);
-    exportButton_->setStyleSheet(subtleOrangeButtonStyle());
-
-    batchReplayButton_ = new QPushButton(QStringLiteral("回放"), toolbarFrame);
-    batchReplayButton_->setFixedSize(72, 32);
-    batchReplayButton_->setStyleSheet(subtleOrangeButtonStyle());
-
-    toolbarLayout->addWidget(exportButton_);
-    toolbarLayout->addWidget(batchReplayButton_);
-    toolbarLayout->addStretch();
-
-    pageLayout->addWidget(toolbarFrame);
 }
 
 void HistoryPage::setupFilterBar(QVBoxLayout *pageLayout)
@@ -1325,8 +1300,6 @@ void HistoryPage::setupFilterBar(QVBoxLayout *pageLayout)
     startTimeEdit_->setButtonSymbols(QAbstractSpinBox::NoButtons);
     startTimeEdit_->setKeyboardTracking(false);
     startTimeEdit_->setMinimumDateTime(QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0)));
-    startTimeEdit_->setSpecialValueText(QStringLiteral("开始日期"));
-    startTimeEdit_->setDateTime(startTimeEdit_->minimumDateTime());
     startTimeEdit_->setFixedSize(142, 32);
     startTimeEdit_->setStyleSheet(QStringLiteral("QDateTimeEdit { %1 }"
                                                  "QDateTimeEdit::drop-down { subcontrol-origin: padding; subcontrol-position: top right; "
@@ -1349,8 +1322,6 @@ void HistoryPage::setupFilterBar(QVBoxLayout *pageLayout)
     endTimeEdit_->setButtonSymbols(QAbstractSpinBox::NoButtons);
     endTimeEdit_->setKeyboardTracking(false);
     endTimeEdit_->setMinimumDateTime(QDateTime(QDate(2000, 1, 1), QTime(0, 0, 0)));
-    endTimeEdit_->setSpecialValueText(QStringLiteral("结束日期"));
-    endTimeEdit_->setDateTime(endTimeEdit_->minimumDateTime());
     endTimeEdit_->setFixedSize(142, 32);
     endTimeEdit_->setStyleSheet(QStringLiteral("QDateTimeEdit { %1 }"
                                                "QDateTimeEdit::drop-down { subcontrol-origin: padding; subcontrol-position: top right; "
@@ -1510,6 +1481,19 @@ void HistoryPage::applyFilters()
     emit historyQueryRequested();
 }
 
+void HistoryPage::applyDefaultDateRange()
+{
+    const QDate today = QDate::currentDate();
+    if (startTimeEdit_)
+    {
+        startTimeEdit_->setDateTime(QDateTime(today.addDays(-7), QTime(0, 0, 0)));
+    }
+    if (endTimeEdit_)
+    {
+        endTimeEdit_->setDateTime(QDateTime(today, QTime(23, 59, 59)));
+    }
+}
+
 void HistoryPage::resetFilters()
 {
     if (serialEdit_)
@@ -1520,14 +1504,7 @@ void HistoryPage::resetFilters()
     {
         detectTypeCombo_->setCurrentIndex(0);
     }
-    if (startTimeEdit_)
-    {
-        startTimeEdit_->setDateTime(startTimeEdit_->minimumDateTime());
-    }
-    if (endTimeEdit_)
-    {
-        endTimeEdit_->setDateTime(endTimeEdit_->minimumDateTime());
-    }
+    applyDefaultDateRange();
 
     currentPage_ = 1;
     emit historyQueryRequested();

@@ -12,6 +12,8 @@ class HomeWebBridge;
 class QLabel;
 class QResizeEvent;
 class QWebEngineView;
+class VideoTakeoverFacade;
+class WhitelistRepository;
 
 class HomePage : public QWidget
 {
@@ -19,6 +21,9 @@ class HomePage : public QWidget
 
   public:
     explicit HomePage(QWidget *parent = nullptr);
+    ~HomePage() override;
+
+    VideoTakeoverFacade *videoTakeoverFacade() const;
 
     void updateDeviceInfo(double lng, double lat, double alt, double yaw, double pitch);
     void updateDroneTargetInfo(const QJsonObject &targetInfo);
@@ -29,6 +34,10 @@ class HomePage : public QWidget
     void updateDeviceJammingSetResponse(int mode, int switchStatus, bool success, const QString &msg);
     void updateDeviceJammingReported(int mode, int switchStatus);
     void setWarningRemoveTimeSeconds(int seconds);
+    void setWhitelistRepository(WhitelistRepository *repository);
+    void setScreenFlashEnabled(bool enabled);
+    void setHomePageVisible(bool visible);
+    void addTargetToWhitelist(const QString &serialNumber, const QString &recordKey);
 
   signals:
     void fullscreenChanged(bool isFullscreen);
@@ -37,6 +46,7 @@ class HomePage : public QWidget
     void requestDroneDirectionFinding(bool enabled, quint32 targetId);
     void requestDronePrecisionStrike(bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId);
     void requestDroneWideBandJamming(bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId);
+    void requestDroneVideoTakeover(bool enabled, quint32 frequencyKhz, quint32 targetId);
 
   private:
     void setupUi();
@@ -44,28 +54,21 @@ class HomePage : public QWidget
     void resizeEvent(QResizeEvent *event) override;
     void showHomeToast(const QString &text);
     void updateHomeToastPosition();
-    void updateRightPanelVisibility();
-    void refreshRightPanelContent(const QJsonObject &targetInfo);
-    void refreshRightPanelContentFromPendingTargets();
     void cleanupExpiredDroneTargets();
-    QString formatPanelFrequency(double frequencyKhz) const;
-    QString resolvePanelSerialNumber(const QJsonObject &targetInfo) const;
-    QString resolvePanelModelName(const QJsonObject &targetInfo) const;
     void dispatchAllDroneTargetsToMap();
+    void evaluateMapAlarmFlash(bool forcePush = false);
 
     QWebEngineView *mapWebView;
     HomeWebBridge *homeWebBridge;
+    VideoTakeoverFacade *videoTakeoverFacade_;
+    WhitelistRepository *whitelistRepository;
     QWidget *bottomBar;
-    QWidget *rightPanel;
-    QLabel *rightPanelTitleLabel;
-    QLabel *rightPanelCountValueLabel;
-    QLabel *rightPanelModelValueLabel;
-    QLabel *rightPanelSerialValueLabel;
-    QLabel *rightPanelFrequencyValueLabel;
-    QLabel *rightPanelDistanceValueLabel;
     BottomConsole *bottomConsole;
     bool mapPageLoaded;
     bool hasPendingDeviceInfo;
+    bool screenFlashEnabled;
+    bool homePageVisible;
+    bool mapAlarmFlashActive;
     double pendingLng;
     double pendingLat;
     double pendingAlt;

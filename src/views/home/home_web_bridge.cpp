@@ -61,6 +61,20 @@ bool HomeWebBridge::handleTitleCommand(const QString &title)
         return handled;
     }
 
+    if (title.startsWith(QStringLiteral("CMD:VIDEO_TAKEOVER:")))
+    {
+        const bool handled = handleVideoTakeoverCommand(title.split(QLatin1Char(':')));
+        resetPageTitle();
+        return handled;
+    }
+
+    if (title.startsWith(QStringLiteral("CMD:WHITELIST_ADD:")))
+    {
+        const bool handled = handleWhitelistAddCommand(title.split(QLatin1Char(':')));
+        resetPageTitle();
+        return handled;
+    }
+
     return false;
 }
 
@@ -149,6 +163,29 @@ void HomeWebBridge::sendWideBandJammingResponse(quint32 targetId, bool enabled, 
     sendEventToWeb(QStringLiteral("updateDroneWideBandJammingResponseFromQt"), payload);
 }
 
+void HomeWebBridge::sendVideoTakeoverResponse(quint32 targetId, bool enabled, bool success, const QString &message)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("targetId")] = static_cast<qint64>(targetId);
+    payload[QStringLiteral("enabled")] = enabled;
+    payload[QStringLiteral("success")] = success;
+    payload[QStringLiteral("message")] = message;
+    sendEventToWeb(QStringLiteral("updateDroneVideoTakeoverResponseFromQt"), payload);
+}
+
+void HomeWebBridge::setMapAlarmFlashActive(bool active)
+{
+    if (!webView_ || !webView_->page())
+    {
+        return;
+    }
+
+    const QString jsCode =
+        QStringLiteral("if(typeof setMapAlarmFlashActive === 'function') setMapAlarmFlashActive(%1);")
+            .arg(active ? QStringLiteral("true") : QStringLiteral("false"));
+    webView_->page()->runJavaScript(jsCode);
+}
+
 bool HomeWebBridge::handleDirectionFindingCommand(const QStringList &parts)
 {
     if (parts.size() < 5)
@@ -211,6 +248,45 @@ bool HomeWebBridge::handleWideBandJammingCommand(const QStringList &parts)
     }
 
     emit wideBandJammingRequested(enabled, frequencyKhz, sn, targetId);
+    return true;
+}
+
+bool HomeWebBridge::handleVideoTakeoverCommand(const QStringList &parts)
+{
+    if (parts.size() < 6)
+    {
+        return false;
+    }
+
+    const bool enabled = parts.at(2) == QStringLiteral("1");
+    bool targetOk = false;
+    bool frequencyOk = false;
+    const quint32 targetId = parts.at(3).toUInt(&targetOk);
+    const quint32 frequencyKhz = parts.at(4).toUInt(&frequencyOk);
+    if (!targetOk || !frequencyOk || frequencyKhz == 0)
+    {
+        return false;
+    }
+
+    emit videoTakeoverRequested(enabled, frequencyKhz, targetId);
+    return true;
+}
+
+bool HomeWebBridge::handleWhitelistAddCommand(const QStringList &parts)
+{
+    if (parts.size() < 4)
+    {
+        return false;
+    }
+
+    const QString serial = QUrl::fromPercentEncoding(parts.at(2).toUtf8()).trimmed();
+    const QString recordKey = QUrl::fromPercentEncoding(parts.at(3).toUtf8()).trimmed();
+    if (serial.isEmpty() && recordKey.isEmpty())
+    {
+        return false;
+    }
+
+    emit whitelistAddRequested(serial, recordKey);
     return true;
 }
 

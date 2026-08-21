@@ -1,13 +1,36 @@
 #include "drone_ops_service.h"
 
 #include <QDebug>
+#include <QImageReader>
 #include <QJsonDocument>
 #include <QJsonObject>
-
+#include <QBuffer>
+#include <QIODevice>
 #include <cstring>
 
 namespace
 {
+bool isJpegPayload(const QByteArray &payload)
+{
+    return payload.size() >= 2
+        && static_cast<uchar>(payload.at(0)) == 0xFF
+        && static_cast<uchar>(payload.at(1)) == 0xD8;
+}
+
+QSize readJpegSize(const QByteArray &payload)
+{
+    QBuffer buffer;
+    buffer.setData(payload);
+    if (!buffer.open(QIODevice::ReadOnly))
+    {
+        return QSize();
+    }
+
+    QImageReader reader(&buffer);
+    const QSize size = reader.size();
+    return size.isValid() ? size : QSize();
+}
+
 void appendUInt32LE(QByteArray &buffer, quint32 value)
 {
     buffer.append(static_cast<char>(value & 0xFF));
@@ -129,6 +152,24 @@ void DroneOpsService::setDroneWideBandJamming(bool enabled, quint32 frequencyKhz
     pendingDroneWideBandJammingTargetId_ = targetId;
 
     sendFrame_(114, payload);
+}
+
+void DroneOpsService::setDroneVideoTakeover(bool enabled, quint32 frequencyKhz, quint32 targetId)
+{
+    if (!sendFrame_)
+    {
+        return;
+    }
+
+    QJsonObject payloadObject;
+    payloadObject.insert(QStringLiteral("SignalSwitch"), enabled ? 1 : 0);
+    payloadObject.insert(QStringLiteral("Freq"), static_cast<qint64>(frequencyKhz));
+    payloadObject.insert(QStringLiteral("Id"), static_cast<qint64>(targetId));
+
+    pendingDroneVideoTakeoverEnabled_ = enabled;
+    pendingDroneVideoTakeoverTargetId_ = targetId;
+
+    sendFrame_(289, QJsonDocument(payloadObject).toJson(QJsonDocument::Compact));
 }
 
 void DroneOpsService::handleDroneTargetReport(const ProtocolHeader *header, const QByteArray &frameData)
@@ -336,4 +377,32 @@ void DroneOpsService::handleDroneWideBandJammingResponse(const QByteArray &frame
                                       pendingDroneWideBandJammingEnabled_,
                                       success,
                                       resultMsg);
+}
+
+void DroneOpsService::handleDroneVideoTakeoverResponse(const QByteArray &frameData)
+{
+    const QString resultMsg = parseResultMessage(frameData);
+    const bool success = resultMsg.contains(QStringLiteral("RESULT:SUCCESSED"), Qt::CaseInsensitive);
+    emit droneVideoTakeoverResponse(pendingDroneVideoTakeoverTargetId_,
+                                    pendingDroneVideoTakeoverEnabled_,
+                                    success,
+                                    resultMsg);
+}
+
+void DroneOpsService::handleDroneVideoImageReport(const QByteArray &frameData)
+{
+    const int payloadLen =
+        frameData.size() - static_cast<int>(sizeof(ProtocolHeader)) - static_cast<int>(sizeof(ProtocolTail));
+    if (payloadLen <= 0)
+    {
+        return;
+    }
+
+    const QByteArray payload = frameData.mid(sizeof(ProtocolHeader), payloadLen);
+    if (!isJpegPayload(payload))
+    {
+        return;
+    }
+
+    emit droneVideoImageReported(payload, readJpegSize(payload));
 }

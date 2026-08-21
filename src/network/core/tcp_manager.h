@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QJsonObject>
 #include <QObject>
+#include <QSize>
 #include <QTcpSocket>
 #include <QTimer>
 #include "protocol_types.h"
@@ -84,6 +85,7 @@ public:
     void setDroneDirectionFinding(bool enabled, quint32 targetId);       // DataType 111
     void setDronePrecisionStrike(bool enabled, quint32 timestamp, const QString &sn, int type, quint32 targetId); // DataType 109
     void setDroneWideBandJamming(bool enabled, quint32 frequencyKhz, const QString &sn, quint32 targetId); // DataType 114
+    void setDroneVideoTakeover(bool enabled, quint32 frequencyKhz, quint32 targetId); // DataType 289
 
 signals:
     // 自定义信号，抛出给 MainWindow 调度
@@ -146,6 +148,8 @@ signals:
     void droneDirectionPowerReported(const QJsonObject &reportData);
     void dronePrecisionStrikeResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
     void droneWideBandJammingResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void droneVideoTakeoverResponse(quint32 targetId, bool enabled, bool success, const QString &msg);
+    void droneVideoImageReported(const QByteArray &jpegPayload, const QSize &frameSize);
 
 private slots:
     void onSocketConnected();

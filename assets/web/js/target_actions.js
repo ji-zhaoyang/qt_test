@@ -17,6 +17,12 @@ var wideJamState = {
     pendingTargetId: null,
     pendingEnabled: false
 };
+var videoTakeoverState = {
+    commandSequence: 0,
+    activeTargets: {},
+    pendingTargetId: null,
+    pendingEnabled: false
+};
 
 function getTargetSerialNumber(target) {
     return String(target && target.targetUniqueId || '').trim();
@@ -40,6 +46,10 @@ function getWideJamStateKey(target) {
 }
 
 function getPrecisionStrikeStateKey(target) {
+    return target ? getTargetDisplayId(target) : '';
+}
+
+function getVideoTakeoverStateKey(target) {
     return target ? getTargetDisplayId(target) : '';
 }
 
@@ -68,6 +78,11 @@ function isPrecisionStrikeActive(target) {
 function isWideJamActive(target) {
     var key = getWideJamStateKey(target);
     return !!(key && wideJamState.activeTargets[key]);
+}
+
+function isVideoTakeoverActive(target) {
+    var key = getVideoTakeoverStateKey(target);
+    return !!(key && videoTakeoverState.activeTargets[key]);
 }
 
 function syncPrecisionStrikeCountdownTimer() {
@@ -166,6 +181,12 @@ function canShowWideJam(target) {
            droneType === 3 || droneType === 4;
 }
 
+function canShowVideoTakeover(target) {
+    var targetId = Number(target && target.targetId);
+    var frequencyKhz = Math.round(Number(target && target.frequencyKhz));
+    return isFinite(targetId) && targetId >= 0 && isFinite(frequencyKhz) && frequencyKhz > 0;
+}
+
 function hasPrecisionStrike(target) {
     var droneType = getDroneType(target);
     var identifyTimestamp = Number(target && target.identifyTimestamp);
@@ -183,7 +204,19 @@ function getTargetActionText(target) {
 }
 
 document.getElementById('detail-whitelist-btn').addEventListener('click', function() {
-    window.alert('白名单功能预留');
+    var target = getSelectedDroneTarget();
+    if (!target) {
+        showTargetActionHint('请先选择目标', true);
+        return;
+    }
+    var serial = getTargetSerialNumber(target);
+    var recordKey = getTargetDisplayId(target);
+    if (!serial && !recordKey) {
+        showTargetActionHint('目标序列号为空', true);
+        return;
+    }
+    showTargetActionHint('', false);
+    sendWhitelistAddCommand(serial, recordKey);
 });
 
 document.getElementById('detail-wide-jam-btn').addEventListener('click', function() {
@@ -204,6 +237,25 @@ document.getElementById('detail-wide-jam-btn').addEventListener('click', functio
     wideJamState.pendingEnabled = enabled;
     showTargetActionHint('', false);
     sendWideJamCommand(enabled, targetId, frequencyKhz, sn);
+});
+
+document.getElementById('detail-video-takeover-btn').addEventListener('click', function() {
+    var target = getSelectedDroneTarget();
+    var targetId = Number(target && target.targetId);
+    var frequencyKhz = Math.round(Number(target && target.frequencyKhz));
+    var enabled = !isVideoTakeoverActive(target);
+    if (!target || !isFinite(targetId) || targetId < 0 || !isFinite(frequencyKhz) || frequencyKhz <= 0) {
+        showTargetActionHint('图传接管参数不完整', true);
+        return;
+    }
+    if (videoTakeoverState.pendingTargetId !== null && videoTakeoverState.pendingTargetId === targetId) {
+        updateVideoTakeoverButtonState(target);
+        return;
+    }
+    videoTakeoverState.pendingTargetId = targetId;
+    videoTakeoverState.pendingEnabled = enabled;
+    showTargetActionHint('', false);
+    sendVideoTakeoverCommand(enabled, targetId, frequencyKhz);
 });
 
 document.getElementById('detail-directional-btn').addEventListener('click', function() {

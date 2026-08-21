@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <title>报表统计</title>
+    <link rel="stylesheet" href="./leaflet.css" />
+    <link rel="stylesheet" href="./css/stats.css" />
+</head>
+<body>
+    <div class="stats-page">
+        <div class="stats-row stats-row--top">
+            <section class="stats-card stats-card--model">
+                <header class="stats-card__header">
+                    <span class="stats-card__title">机型统计</span>
+                </header>
+                <div class="stats-card__body stats-model-body">
+                    <div id="model-pie" class="stats-pie"></div>
+                    <div id="model-legend" class="stats-legend"></div>
+                </div>
+            </section>
+            <section class="stats-card stats-card--track">
+                <header class="stats-card__header">
+                    <span class="stats-card__title">数据统计</span>
+                </header>
+                <div id="track-cards" class="stats-track-cards"></div>
+            </section>
+        </div>
+        <div class="stats-row stats-row--charts">
+            <section class="stats-card stats-card--chart">
+                <header class="stats-card__header">
+                    <span class="stats-card__title">无人机反制趋势统计</span>
+                </header>
+                <div id="counter-chart" class="stats-chart"></div>
+            </section>
+            <section class="stats-card stats-card--chart">
+                <header class="stats-card__header stats-card__header--legend">
+                    <span class="stats-card__title">无人机探测趋势统计</span>
+                    <div class="stats-chart-legend">
+                        <span class="stats-chart-legend__item"><i style="background:#FFE20C"></i>滞留时长(分钟)</span>
+                        <span class="stats-chart-legend__item"><i style="background:#34FDFF"></i>探测频次</span>
+                    </div>
+                </header>
+                <div id="detection-chart" class="stats-chart"></div>
+            </section>
+        </div>
+        <div class="stats-row stats-row--heatmap">
+            <section class="stats-card stats-card--heatmap">
+                <header class="stats-card__header stats-card__header--heatmap">
+                    <span class="stats-card__title">无人机探测热力图</span>
+                    <div class="stats-heatmap-actions">
+                        <label class="stats-heatmap-toggle">
+                            <input type="checkbox" id="stats-heatmap-marker-toggle" />
+                            <span>显示标记点</span>
+                        </label>
+                        <button type="button" class="stats-heatmap-locate" id="stats-heatmap-locate" title="适应范围">⊙</button>
+                    </div>
+                </header>
+                <div class="stats-heatmap-body">
+                    <div id="stats-heatmap-map" class="stats-heatmap-map"></div>
+                    <div id="stats-heatmap-empty" class="stats-heatmap-empty">暂无点位数据</div>
+                </div>
+            </section>
+        </div>
+    </div>
+    <script src="./leaflet.js"></script>
+    <script src="./js/simpleheat.js"></script>
+    <script src="./js/stats_heat_layer.js"></script>
+    <script src="./js/stats_charts.js"></script>
+    <script src="./js/stats_heatmap.js"></script>
+</body>
+</html>
